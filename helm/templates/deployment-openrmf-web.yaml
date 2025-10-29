@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-openrmf-web
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: openrmf-web
+  template:
+    metadata:
+      labels:
+        app: openrmf-web
+    spec:
+      containers:
+        - name: openrmf-web
+          image: {{ .Values.images.openrmfWeb }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: MONGO_URI
+              value: {{ .Values.secrets.mongoUri }}
