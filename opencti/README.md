@@ -1,2 +1,2 @@
-# Cortex Integration
-This directory contains configurations for Cortex integration.
+# OpenCTI Integration
+This directory contains configurations for the full OpenCTI stack integration using official production images.
