@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openrmf-api-audit
+  namespace: openrisk
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: openrmf-api-audit
+  template:
+    metadata:
+      labels:
+        app: openrmf-api-audit
+    spec:
+      containers:
+        - name: openrmf-api-audit
+          image: cingulara/openrmf-api-audit:latest
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: openrisk-secrets
+                  key: MONGO_URI
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
