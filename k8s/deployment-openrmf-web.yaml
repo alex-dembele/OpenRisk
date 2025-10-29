@@ -2,9 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: openrmf-web
-  namespace: openriskops
+  namespace: openrisk
 spec:
-  replicas: 2  # Scale for production
+  replicas: 2
   selector:
     matchLabels:
       app: openrmf-web
@@ -15,10 +15,17 @@ spec:
     spec:
       containers:
         - name: openrmf-web
-          image: cingulara/openrmf-web:1.13.00
-          envFrom:
-            - secretRef:
-                name: openrmf-secrets
+          image: cingulara/openrmf-web:latest
+          env:
+            - name: JWTAUTHORITY
+              value: http://openrmf-keycloak:8080/realms/openrmf
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: openrisk-secrets
+                  key: MONGO_URI
+          ports:
+            - containerPort: 8080
           resources:
             limits:
               cpu: "500m"
