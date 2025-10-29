@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openrmf-keycloak
+  namespace: openrisk
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openrmf-keycloak
+  template:
+    metadata:
+      labels:
+        app: openrmf-keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: jboss/keycloak:23.0.0
+          env:
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: openriskops-secrets
+                  key: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openriskops-secrets
+                  key: KEYCLOAK_ADMIN_PASSWORD
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: keycloak-data
+              mountPath: /opt/jboss/keycloak/standalone/data
+      volumes:
+        - name: keycloak-data
+          persistentVolumeClaim:
+            claimName: keycloak-pvc
