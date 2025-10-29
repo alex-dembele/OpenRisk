@@ -1,0 +1,4 @@
+scrape_configs:
+  - job_name: 'openrisk'
+    static_configs:
+      - targets: ['openrmf-web:8080', 'thehive:9000', 'cortex:9001']  # Metrics endpoints
