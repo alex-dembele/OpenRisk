@@ -1,0 +1,51 @@
+name: OpenRisk CI/CD
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      - name: Build and push images
+        run: |
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest ./sync-engine
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest
+          # Repeat for dashboard backend/frontend; official images are pulled
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests
+        run: |
+          # Add tests dir if not present; e.g., pytest sync-engine/tests.py
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+      - name: Configure kubeconfig
+        run: echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
+      - name: Deploy to Kubernetes
+        run: |
+          helm upgrade --install openrisk ./helm --namespace openrisk --create-namespace \
+            --set images.syncEngine=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest
+          # Update other images if custom
