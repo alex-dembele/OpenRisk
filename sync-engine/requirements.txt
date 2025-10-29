@@ -1,0 +1,3 @@
+requests
+schedule
+python-dotenv
