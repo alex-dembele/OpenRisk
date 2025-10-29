@@ -1,0 +1,8 @@
+{
+  "name": "openriskops-frontend",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.2.0",
+    "tailwindcss": "^3.3.0"
+  }
+}
