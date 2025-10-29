@@ -1,0 +1,4 @@
+apiVersion: v2
+name: openrisk
+description: Helm chart for OpenRisk
+version: 0.1.0
