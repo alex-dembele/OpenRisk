@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: mongo
-  namespace: openriskops
+  namespace: openrisk
 spec:
   serviceName: mongo
   replicas: 1  # Scale to 3 for HA in prod
