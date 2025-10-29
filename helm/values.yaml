@@ -1,3 +1,25 @@
-replicas: 2
-imagePullPolicy: IfNotPresent
-# Secrets, resources, etc.
+replicaCount: 1  # Default, override for prod
+
+images:
+  mongo: mongo:7.0
+  keycloak: jboss/keycloak:23.0.0
+  openrmfWeb: cingulara/openrmf-web:1.13.00
+  # List all
+
+secrets:
+  mongoUri: mongodb://mongo:27017/openrmf
+  # Base64 or externalSecret
+
+persistence:
+  enabled: true
+  storageClass: ""
+  size: 10Gi
+
+ingress:
+  enabled: false
+  className: ""
+  hosts:
+    - host: openriskops.example.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
