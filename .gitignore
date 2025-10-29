@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+docker-compose.override.yml
+volumes/
+k8s/secrets/
