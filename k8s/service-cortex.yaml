@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cortex
+  namespace: openrisk
+spec:
+  selector:
+    app: cortex
+  ports:
+    - port: 9001
+      targetPort: 9001
