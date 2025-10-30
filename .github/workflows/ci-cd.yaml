@@ -1,10 +1,10 @@
-name: OpenRiskOps CI/CD
+name: OpenRisk CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
@@ -21,16 +21,16 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
       - name: Build and push sync-engine image
         run: |
-          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-sync-engine:latest ./sync-engine
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-sync-engine:latest
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest ./sync-engine
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest
       - name: Build and push dashboard-backend image
         run: |
-          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-backend:latest ./dashboard/backend
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-backend:latest
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-dashboard-backend:latest ./dashboard/backend
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-dashboard-backend:latest
       - name: Build and push dashboard-frontend image
         run: |
-          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-frontend:latest ./dashboard/frontend
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-frontend:latest
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-dashboard-frontend:latest ./dashboard/frontend
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-dashboard-frontend:latest
 
   test:
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
       - name: Deploy to Kubernetes with Helm
         run: |
-          helm upgrade --install openriskops ./helm --namespace openriskops --create-namespace \
-            --set images.syncEngine=${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-sync-engine:latest \
-            --set images.dashboardBackend=${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-backend:latest \
-            --set images.dashboardFrontend=${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-frontend:latest
+          helm upgrade --install openrisk ./helm --namespace openrisk --create-namespace \
+            --set images.syncEngine=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest \
+            --set images.dashboardBackend=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-dashboard-backend:latest \
+            --set images.dashboardFrontend=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-dashboard-frontend:latest
