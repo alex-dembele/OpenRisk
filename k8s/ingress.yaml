@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openrisk-ingress
+  namespace: openrisk
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - yourdomain.com
+      secretName: tls-secret
+  rules:
+    - host: yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard-frontend
+                port:
+                  number: 3000
+          - path: /openrmf
+            pathType: Prefix
+            backend:
+              service:
+                name: openrmf-web
+                port:
+                  number: 8080
+          # Add others

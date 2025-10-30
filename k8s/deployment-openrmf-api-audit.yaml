@@ -1,31 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: openrmf-web
+  name: openrmf-api-audit
   namespace: openrisk
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: openrmf-web
+      app: openrmf-api-audit
   template:
     metadata:
       labels:
-        app: openrmf-web
+        app: openrmf-api-audit
     spec:
       containers:
-        - name: openrmf-web
-          image: cingulara/openrmf-web:latest
+        - name: openrmf-api-audit
+          image: cingulara/openrmf-api-audit:latest
           env:
-            - name: JWTAUTHORITY
-              value: http://openrmf-keycloak:8080/realms/openrmf
             - name: MONGO_URI
               valueFrom:
                 secretKeyRef:
                   name: openrisk-secrets
                   key: MONGO_URI
-          ports:
-            - containerPort: 8080
           resources:
             limits:
               cpu: "500m"

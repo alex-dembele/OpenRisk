@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import requests
+import requests  # To proxy to other APIs
 from fastapi.middleware.cors import CORSMiddleware  # For production CORS
 
 app = FastAPI()
@@ -13,4 +13,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes as before, with timeouts and error handling
+class Risk(BaseModel):
+    id: str
+    name: str
+
+@app.get("/risks")
+def get_risks():
+    # Proxy to OpenRMF
+    return requests.get("http://openrmf:8080/api/risks").json()
+
+@app.get("/threats")
+def get_threats():
+    # Proxy to OpenCTI with auth
+    pass  
+
+@app.get("/incidents")
+def get_incidents():
+    pass
+
+@app.get("/actions")
+def get_actions():
+    pass
