@@ -37,7 +37,7 @@ For production, use a dedicated server or VM. Enable HTTPS, persistent storage, 
    - Use production images (e.g., tagged versions instead of :latest).
 4. Build and start: `docker compose up -d --build --force-recreate`
 5. Configure NGINX reverse proxy for HTTPS (example config in /openrmf/nginx.conf).
-6. Set up systemd service for auto-start: Create /etc/systemd/system/openrisk.service
+6. Set up systemd service for auto-start: Create /etc/systemd/system/openrisk.servicegi
 `
 [Unit]
 Description=OpenRiskOps
