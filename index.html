@@ -1,162 +1,142 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="OpenRisk: Open-source platform for unified risk and threat intelligence management. Integrate OpenRMF, TheHive, Cortex, and OpenCTI seamlessly.">
-  <meta name="keywords" content="cybersecurity, risk management, threat intelligence, open source, OpenRMF, TheHive, Cortex, OpenCTI">
-  <meta property="og:title" content="OpenRisk - Unified Risk & Threat Management">
-  <meta property="og:description" content="Open-source tool for centralized risk, incident, and threat management.">
-  <meta property="og:image" content="https://alex-dembele.github.io/OpenRisk/logo.png">
-  <meta property="og:url" content="https://alex-dembele.github.io/OpenRisk/">
+  <meta name="description" content="OpenRisk: Unified Risk & Threat Intelligence Management Platform - Open Source. Professional cybersecurity tool for risk registry, incidents, threats, and automations.">
+  <meta name="keywords" content="cybersecurity, risk management, threat intelligence, open source, dark mode">
   <title>OpenRisk - Unified Risk & Threat Management</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js" defer></script>
   <script src="js/demo.js" defer></script>
 </head>
-<body class="bg-gray-100 font-sans transition-colors duration-300" data-theme="light">
-  <!-- Hero Section with Parallax -->
-  <section id="hero" class="relative h-screen bg-gradient-to-br from-blue-900 to-blue-600 text-white flex items-center justify-center overflow-hidden">
-    <div class="parallax-bg absolute inset-0 bg-cover bg-center" style="background-image: url('https://source.unsplash.com/random/1920x1080/?cybersecurity');"></div>
-    <div class="relative z-10 text-center">
-      <img src="logo.png" alt="OpenRisk Logo" class="h-24 mx-auto mb-4">
-      <h1 class="text-5xl font-bold mb-4">OpenRisk</h1>
-      <p class="text-2xl mb-8">Unified Risk & Threat Management – Open Source</p>
-      <a href="https://github.com/alex-dembele/OpenRisk" class="bg-white text-blue-800 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition">Get Started</a>
-    </div>
-  </section>
+<body class="bg-gray-900 text-gray-100 font-inter transition-colors duration-300">
+  <!-- Theme Toggle -->
+  <button id="theme-toggle" class="fixed top-4 right-4 z-50 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700" aria-label="Toggle Theme">
+    <i class="fas fa-moon"></i>
+  </button>
 
-  <!-- About Section -->
-  <section id="about" class="py-16 bg-white" data-aos="fade-up">
-    <div class="container mx-auto px-4">
-      <h2 class="text-3xl font-bold text-center mb-8">About OpenRisk</h2>
-      <p class="text-lg text-center max-w-3xl mx-auto">OpenRisk is an infrastructure-agnostic, open-source platform that integrates leading tools like OpenRMF, TheHive, Cortex, and OpenCTI to centralize risk management, incidents, threats, and corrective actions. Perfect for enterprises seeking seamless compliance and threat intelligence.</p>
+  <!-- Navigation (Sticky) -->
+  <nav class="sticky top-0 bg-gray-800 shadow-lg z-40">
+    <div class="container mx-auto flex justify-between items-center py-4">
+      <div class="flex items-center">
+        <img src="logo.png" alt="OpenRisk Logo" class="h-10 mr-2">
+        <h1 class="text-2xl font-bold">OpenRisk</h1>
+      </div>
+      <ul class="flex space-x-6">
+        <li><a href="#features" class="hover:text-blue-400">Features</a></li>
+        <li><a href="#demo" class="hover:text-blue-400">Demo</a></li>
+        <li><a href="#screenshots" class="hover:text-blue-400">Screenshots</a></li>
+        <li><a href="#testimonials" class="hover:text-blue-400">Testimonials</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section with Parallax -->
+  <section id="hero" class="relative bg-gradient-to-br from-blue-900 to-gray-900 py-20 text-center overflow-hidden">
+    <div class="parallax-bg absolute inset-0 bg-cover bg-center opacity-20" style="background-image: url('https://images.unsplash.com/photo-1558494949-ef0d38d6f30c');"></div>
+    <div class="container mx-auto relative z-10" data-aos="fade-up" data-aos-duration="1000">
+      <h2 class="text-5xl font-bold mb-4">Unified Risk & Threat Management</h2>
+      <p class="text-xl mb-6">Open Source Platform for Cybersecurity Excellence</p>
+      <a href="#demo" class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg hover:bg-blue-700 transform hover:scale-105 transition-transform">Try Demo</a>
     </div>
   </section>
 
   <!-- Features Section -->
-  <section id="features" class="py-16 bg-gray-100" data-aos="fade-up">
-    <div class="container mx-auto px-4">
+  <section id="features" class="py-12 bg-gray-800">
+    <div class="container mx-auto" data-aos="fade-up">
       <h2 class="text-3xl font-bold text-center mb-8">Key Features</h2>
-      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition" data-aos="zoom-in">
-          <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          <h3 class="text-xl font-semibold mb-2 text-center">Risk Registry</h3>
-          <p class="text-center">Manage compliance and risks with OpenRMF integration.</p>
-        </div>
-        <div class="bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition" data-aos="zoom-in" data-aos-delay="100">
-          <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-          <h3 class="text-xl font-semibold mb-2 text-center">Incident Management</h3>
-          <p class="text-center">Handle investigations with TheHive.</p>
-        </div>
-        <div class="bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition" data-aos="zoom-in" data-aos-delay="200">
-          <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-          <h3 class="text-xl font-semibold mb-2 text-center">Automation</h3>
-          <p class="text-center">Execute analyses with Cortex playbooks.</p>
-        </div>
-        <div class="bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition" data-aos="zoom-in" data-aos-delay="300">
-          <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          <h3 class="text-xl font-semibold mb-2 text-center">Threat Intelligence</h3>
-          <p class="text-center">Contextualize threats with OpenCTI.</p>
-        </div>
+      <div class="tabs flex justify-center mb-6">
+        <button class="tab-button px-4 py-2 bg-blue-700 text-white rounded-t-lg" data-tab="integrations" aria-selected="true">Integrations</button>
+        <button class="tab-button px-4 py-2 bg-gray-700 text-white rounded-t-lg" data-tab="risks">Risk Management</button>
+        <button class="tab-button px-4 py-2 bg-gray-700 text-white rounded-t-lg" data-tab="incidents">Incident Handling</button>
+      </div>
+      <div id="integrations" class="tab-content p-6 bg-gray-900 rounded-lg shadow-lg">
+        <ul class="list-disc pl-8 mb-4 text-gray-300">
+          <li>OpenRMF: Risk registry and compliance.</li>
+          <li>TheHive: Incident investigations.</li>
+          <li>Cortex: Automation and analysis.</li>
+          <li>OpenCTI: Threat contextualization.</li>
+        </ul>
+        <img src="https://lh7-us.googleusercontent.com/sZfEeVa9yYFW8K92ZQYx6UQfYiiT_P76VjhD01BXMXVv7v7qwQ1UdqpRH394MSSgCsAlxYVz_LYzYqnz5FrTvw4sdjoMgetCwe5sKsMOYlUDRoEn8wdjA26BLuOK63RzN6EUGd_iodF3J34f1-oLey4" alt="Integration Diagram" class="mx-auto rounded shadow-lg">
+      </div>
+      <div id="risks" class="tab-content p-6 bg-gray-900 rounded-lg shadow-lg hidden">
+        <p class="text-gray-300">Comprehensive risk tracking with continuous evaluation.</p>
+        <img src="https://www.slideteam.net/media/catalog/product/cache/1280x720/r/i/risk_management_dashboard_for_information_security_cybersecurity_risk_analysis_and_management_plan_slide01.jpg" alt="Risk Dashboard Screenshot" class="mx-auto rounded shadow-lg">
+      </div>
+      <div id="incidents" class="tab-content p-6 bg-gray-900 rounded-lg shadow-lg hidden">
+        <p class="text-gray-300">Advanced incident management with timelines and automations.</p>
+        <img src="https://slidebazaar.com/wp-content/uploads/2025/06/incident-tracking-template-powerpoint-google-slides-dark.jpg" alt="Incident Timeline Screenshot" class="mx-auto rounded shadow-lg">
       </div>
     </div>
   </section>
 
-  <!-- Demo Section -->
-  <section id="demo" class="py-16 bg-blue-50" data-aos="fade-up">
-    <div class="container mx-auto px-4">
+  <!-- Demo Interactive Section -->
+  <section id="demo" class="py-12 bg-gradient-to-br from-gray-900 to-blue-900">
+    <div class="container mx-auto" data-aos="zoom-in">
       <h2 class="text-3xl font-bold text-center mb-8">Interactive Demo</h2>
-      <button id="open-demo-modal" class="bg-blue-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-700 transition mx-auto block">Launch Demo</button>
-      <div id="demo-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden flex items-center justify-center z-50 transition-opacity duration-300">
-        <div class="bg-white p-6 rounded-lg w-11/12 md:w-3/4 h-3/4 relative">
-          <button id="close-demo-modal" class="absolute top-2 right-2 text-gray-600 hover:text-red-500">✕</button>
-          <iframe src="https://codesandbox.io/s/embedded-dashboard-react-9gvv5?embed=1" class="w-full h-full rounded" title="Interactive Dashboard Demo" loading="lazy"></iframe>
+      <button id="open-demo-modal" class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg mx-auto block hover:bg-blue-700 transform hover:scale-105 transition-transform">Launch Demo</button>
+      <div id="demo-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden flex items-center justify-center z-50">
+        <div class="bg-gray-800 p-6 rounded-lg w-11/12 md:w-3/4 h-3/4 relative">
+          <button id="close-demo-modal" class="absolute top-2 right-2 text-gray-300 hover:text-white"><i class="fas fa-times text-2xl"></i></button>
+          <iframe src="https://codesandbox.io/s/embedded-dashboard-react-9gvv5?embed=1" class="w-full h-full rounded" title="Interactive Dashboard Demo"></iframe>
         </div>
       </div>
     </div>
   </section>
 
   <!-- Screenshots Section -->
-  <section id="screenshots" class="py-16 bg-white" data-aos="fade-up">
-    <div class="container mx-auto px-4">
+  <section id="screenshots" class="py-12 bg-gray-800">
+    <div class="container mx-auto" data-aos="fade-right">
       <h2 class="text-3xl font-bold text-center mb-8">Screenshots</h2>
       <div class="grid md:grid-cols-3 gap-6">
-        <figure class="relative">
-          <img src="https://images.prismic.io/secureframe-com/fc47daca-3883-4db9-9ed5-9c5001e694cf_Risk+management+dashboard.png?auto=format,compress" alt="Risk Dashboard" class="rounded-lg shadow-lg hover:scale-105 transition-transform">
-          <figcaption class="text-center mt-2">Risk Management Dashboard</figcaption>
-        </figure>
-        <figure class="relative">
-          <img src="https://www.redlegg.com/hs-fs/hubfs/Check-Point-Threat-Map.png?width=976&height=500&name=Check-Point-Threat-Map.png" alt="Threat Map" class="rounded-lg shadow-lg hover:scale-105 transition-transform">
-          <figcaption class="text-center mt-2">Global Threat Map</figcaption>
-        </figure>
-        <figure class="relative">
-          <img src="https://www.slidegeeks.com/media/catalog/product/cache/560x315/c/y/cyber_security_incident_management_dashboard_ppt_powerpoint_presentation_file_ideas_pdf_slide01.jpg" alt="Incident Dashboard" class="rounded-lg shadow-lg hover:scale-105 transition-transform">
-          <figcaption class="text-center mt-2">Incident Timeline</figcaption>
-        </figure>
+        <div class="relative overflow-hidden rounded-lg shadow-lg group">
+          <img src="https://images.prismic.io/secureframe-com/fc47daca-3883-4db9-9ed5-9c5001e694cf_Risk+management+dashboard.png?auto=format,compress" alt="Risk Dashboard" class="w-full h-auto transform group-hover:scale-105 transition-transform duration-300">
+          <div class="absolute bottom-0 left-0 bg-blue-600 text-white px-4 py-2">Risk Dashboard</div>
+        </div>
+        <div class="relative overflow-hidden rounded-lg shadow-lg group">
+          <img src="https://www.redlegg.com/hs-fs/hubfs/Check-Point-Threat-Map.png?width=976&height=500&name=Check-Point-Threat-Map.png" alt="Threat Map" class="w-full h-auto transform group-hover:scale-105 transition-transform duration-300">
+          <div class="absolute bottom-0 left-0 bg-blue-600 text-white px-4 py-2">Threat Map</div>
+        </div>
+        <div class="relative overflow-hidden rounded-lg shadow-lg group">
+          <img src="https://www.slidegeeks.com/media/catalog/product/cache/560x315/c/y/cyber_security_incident_management_dashboard_ppt_powerpoint_presentation_file_ideas_pdf_slide01.jpg" alt="Incident Dashboard" class="w-full h-auto transform group-hover:scale-105 transition-transform duration-300">
+          <div class="absolute bottom-0 left-0 bg-blue-600 text-white px-4 py-2">Incident Dashboard</div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Testimonials Section -->
-  <section id="testimonials" class="py-16 bg-gray-100" data-aos="fade-up">
-    <div class="container mx-auto px-4">
+  <!-- Testimonials Section with Carousel -->
+  <section id="testimonials" class="py-12 bg-gradient-to-br from-blue-900 to-gray-900">
+    <div class="container mx-auto" data-aos="fade-left">
       <h2 class="text-3xl font-bold text-center mb-8">What Users Say</h2>
-      <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-white p-6 rounded-lg shadow-lg">
-          <p class="italic">"OpenRisk revolutionized our risk management – seamless integrations!"</p>
-          <p class="text-right mt-4">- John Doe, Cybersecurity Analyst</p>
-        </div>
-        <div class="bg-white p-6 rounded-lg shadow-lg">
-          <p class="italic">"Easy to deploy and highly customizable. A must for any security team."</p>
-          <p class="text-right mt-4">- Jane Smith, IT Manager</p>
-        </div>
-        <div class="bg-white p-6 rounded-lg shadow-lg">
-          <p class="italic">"The dashboard is intuitive and powerful – saved us hours weekly."</p>
-          <p class="text-right mt-4">- Alex Johnson, Compliance Officer</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- FAQ Section -->
-  <section id="faq" class="py-16 bg-white" data-aos="fade-up">
-    <div class="container mx-auto px-4">
-      <h2 class="text-3xl font-bold text-center mb-8">Frequently Asked Questions</h2>
-      <div class="accordion space-y-4 max-w-3xl mx-auto">
-        <div class="accordion-item bg-gray-50 rounded-lg">
-          <button class="accordion-header px-4 py-3 w-full text-left font-semibold flex justify-between">What is OpenRisk?<span class="text-blue-600">+</span></button>
-          <div class="accordion-content px-4 py-2 hidden">An open-source platform integrating tools for risk and threat management.</div>
-        </div>
-        <div class="accordion-item bg-gray-50 rounded-lg">
-          <button class="accordion-header px-4 py-3 w-full text-left font-semibold flex justify-between">How to install?<span class="text-blue-600">+</span></button>
-          <div class="accordion-content px-4 py-2 hidden">Use Docker Compose or Kubernetes – check docs on GitHub.</div>
-        </div>
-        <div class="accordion-item bg-gray-50 rounded-lg">
-          <button class="accordion-header px-4 py-3 w-full text-left font-semibold flex justify-between">Is it free?<span class="text-blue-600">+</span></button>
-          <div class="accordion-content px-4 py-2 hidden">Yes, fully open-source under MIT License.</div>
+      <div class="carousel relative overflow-hidden">
+        <div class="carousel-inner flex transition-transform duration-500">
+          <div class="carousel-item min-w-full p-4 bg-gray-800 rounded-lg shadow-lg text-center">
+            <p class="text-gray-300">"Excellent pour notre SOC ! – Équipe CybSec XYZ"</p>
+          </div>
+          <div class="carousel-item min-w-full p-4 bg-gray-800 rounded-lg shadow-lg text-center">
+            <p class="text-gray-300">"Intégrations parfaites et UI intuitive. – DevOps Inc."</p>
+          </div>
+          <div class="carousel-item min-w-full p-4 bg-gray-800 rounded-lg shadow-lg text-center">
+            <p class="text-gray-300">"Le meilleur outil open-source pour la gestion des risques. – Global Sec Firm"</p>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- CTA Section -->
-  <section class="py-16 bg-blue-800 text-white text-center">
-    <div class="container mx-auto">
-      <h2 class="text-3xl font-bold mb-4">Ready to Secure Your Operations?</h2>
-      <a href="https://github.com/alex-dembele/OpenRisk" class="bg-white text-blue-800 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition">Download Now</a>
     </div>
   </section>
 
   <!-- Footer -->
-  <footer class="bg-blue-900 text-white py-6 text-center">
-    <p>&copy; 2025 OpenRisk. All rights reserved. MIT License.</p>
-    <div class="mt-2">
-      <a href="https://github.com/alex-dembele/OpenRisk" class="text-blue-300 hover:underline mx-2">GitHub</a> |
-      <a href="https://github.com/alex-dembele/OpenRisk/tree/master/docs" class="text-blue-300 hover:underline mx-2">Docs</a> |
-      <a href="https://github.com/alex-dembele/OpenRisk/blob/master/CONTRIBUTING.md" class="text-blue-300 hover:underline mx-2">Contribute</a>
+  <footer class="bg-gray-800 py-6 text-center">
+    <p class="text-gray-400">&copy; 2025 OpenRisk. MIT License.</p>
+    <div class="flex justify-center space-x-4 mt-2">
+      <a href="https://github.com/alex-dembele/OpenRisk" class="text-blue-400 hover:text-blue-300"><i class="fab fa-github"></i> GitHub</a>
+      <a href="https://github.com/alex-dembele/OpenRisk/docs" class="text-blue-400 hover:text-blue-300"><i class="fas fa-book"></i> Docs</a>
+      <a href="https://github.com/alex-dembele/OpenRisk/blob/main/CONTRIBUTING.md" class="text-blue-400 hover:text-blue-300"><i class="fas fa-handshake"></i> Contribute</a>
     </div>
   </footer>
 </body>

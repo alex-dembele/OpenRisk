@@ -1,48 +1,37 @@
-/* Custom Styles for Professional Look */
+/* Custom styles */
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+.dark body {
+  background: linear-gradient(to bottom, #111827, #1f2937);
+}
+
 .parallax-bg {
-  transform: translateZ(-1px) scale(1.1); /* Parallax effect */
-  background-attachment: fixed;
+  transform: translateY(calc(var(--scroll-y) * 0.5px));
 }
 
-[data-theme="dark"] {
-  --bg-color: #1f2937;
-  --text-color: #f3f4f6;
-  --accent-color: #3b82f6;
+.tabs button {
+  transition: background-color 0.3s;
 }
 
-body[data-theme="dark"] {
-  background-color: var(--bg-color);
-  color: var(--text-color);
+.tab-content {
+  animation: fadeIn 0.5s ease-in;
 }
 
-body[data-theme="dark"] .bg-white {
-  background-color: #374151;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-body[data-theme="dark"] .bg-gray-100 {
-  background-color: #1f2937;
+.group:hover img {
+  filter: brightness(1.1);
 }
 
-.accordion-header:hover {
-  background-color: #e5e7eb;
+.carousel-inner {
+  width: 300%;  
 }
 
-.accordion-content {
-  background-color: #f9fafb;
-}
-
-.shadow-lg {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-.transition {
-  transition: all 0.3s ease;
-}
-
-/* Toggle Switch for Dark Mode */
-#dark-mode-toggle {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  z-index: 50;
+.carousel-item {
+  transition: transform 0.5s ease;
 }
