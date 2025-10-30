@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sync-engine
+  namespace: openriskops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sync-engine
+  template:
+    metadata:
+      labels:
+        app: sync-engine
+    spec:
+      containers:
+        - name: sync-engine
+          image: yourrepo/openrisk-sync-engine:latest  # Custom build
+          envFrom:
+            - secretRef:
+                name: openriskops-secrets
+          resources:
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
