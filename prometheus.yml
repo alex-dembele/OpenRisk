@@ -1,4 +1,7 @@
+global:
+  scrape_interval: 15s
+
 scrape_configs:
   - job_name: 'openrisk'
     static_configs:
-      - targets: ['openrmf-web:8080', 'thehive:9000', 'cortex:9001']  # Metrics endpoints
+      - targets: ['openrmf-web:8080', 'thehive:9000', 'cortex:9001', 'opencti:8082', 'dashboard-backend:8000']
