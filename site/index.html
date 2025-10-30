@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="OpenRiskOps: Unified Risk & Threat Intelligence Management Platform - Open Source">
+  <meta name="keywords" content="cybersecurity, risk management, threat intelligence, open source">
+  <title>OpenRiskOps - Unified Risk & Threat Management</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/demo.js" defer></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-800 text-white py-4">
+    <div class="container mx-auto flex items-center justify-center">
+      <img src="logo.png" alt="OpenRiskOps Logo" class="h-16 mr-4">
+      <h1 class="text-3xl font-bold">OpenRiskOps</h1>
+    </div>
+    <p class="text-center text-xl mt-2">Unified Risk & Threat Management – Open Source</p>
+  </header>
+
+  <!-- Features Section -->
+  <section id="features" class="py-8 bg-white">
+    <div class="container mx-auto">
+      <h2 class="text-2xl font-bold text-center mb-6">Features</h2>
+      <div class="tabs">
+        <button class="tab-button active" data-tab="integrations">Integrations</button>
+        <button class="tab-button" data-tab="risks">Risk Management</button>
+        <button class="tab-button" data-tab="incidents">Incident Handling</button>
+      </div>
+      <div id="integrations" class="tab-content active">
+        <ul class="list-disc pl-8 mb-4">
+          <li>OpenRMF: Risk registry and compliance management.</li>
+          <li>TheHive: Incident and investigation management.</li>
+          <li>Cortex: Automation and analysis execution.</li>
+          <li>OpenCTI: Threat contextualization and vulnerability sync.</li>
+        </ul>
+        <img src="https://lh7-us.googleusercontent.com/sZfEeVa9yYFW8K92ZQYx6UQfYiiT_P76VjhD01BXMXVv7v7qwQ1UdqpRH394MSSgCsAlxYVz_LYzYqnz5FrTvw4sdjoMgetCwe5sKsMOYlUDRoEn8wdjA26BLuOK63RzN6EUGd_iodF3J34f1-oLey4" alt="Integration Diagram" class="mx-auto rounded shadow">
+      </div>
+      <div id="risks" class="tab-content hidden">
+        <p>Comprehensive risk tracking with continuous evaluation.</p>
+        <img src="https://www.slideteam.net/media/catalog/product/cache/1280x720/r/i/risk_management_dashboard_for_information_security_cybersecurity_risk_analysis_and_management_plan_slide01.jpg" alt="Risk Dashboard Screenshot" class="mx-auto rounded shadow">
+      </div>
+      <div id="incidents" class="tab-content hidden">
+        <p>Incident management with timelines and automations.</p>
+        <img src="https://slidebazaar.com/wp-content/uploads/2025/06/incident-tracking-template-powerpoint-google-slides-dark.jpg" alt="Incident Timeline Screenshot" class="mx-auto rounded shadow">
+      </div>
+    </div>
+  </section>
+
+  <!-- Demo Interactive Section -->
+  <section id="demo" class="py-8 bg-gray-200">
+    <div class="container mx-auto">
+      <h2 class="text-2xl font-bold text-center mb-6">Interactive Demo</h2>
+      <button id="open-demo-modal" class="bg-blue-600 text-white px-4 py-2 rounded mx-auto block">Launch Demo</button>
+      <div id="demo-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white p-4 rounded-lg w-3/4 h-3/4">
+          <button id="close-demo-modal" class="float-right text-red-500">Close</button>
+          <iframe src="https://codesandbox.io/s/embedded-dashboard-react-9gvv5?embed=1" class="w-full h-full" title="Interactive Dashboard Demo"></iframe>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots Section -->
+  <section id="screenshots" class="py-8 bg-white">
+    <div class="container mx-auto">
+      <h2 class="text-2xl font-bold text-center mb-6">Screenshots</h2>
+      <div class="grid md:grid-cols-3 gap-4">
+        <img src="https://images.prismic.io/secureframe-com/fc47daca-3883-4db9-9ed5-9c5001e694cf_Risk+management+dashboard.png?auto=format,compress" alt="Risk Dashboard" class="rounded shadow">
+        <img src="https://www.redlegg.com/hs-fs/hubfs/Check-Point-Threat-Map.png?width=976&height=500&name=Check-Point-Threat-Map.png" alt="Threat Map" class="rounded shadow">
+        <img src="https://www.slidegeeks.com/media/catalog/product/cache/560x315/c/y/cyber_security_incident_management_dashboard_ppt_powerpoint_presentation_file_ideas_pdf_slide01.jpg" alt="Incident Dashboard" class="rounded shadow">
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-blue-800 text-white py-4 text-center">
+    <p>&copy; 2025 OpenRiskOps. MIT License.</p>
+    <a href="https://github.com/youruser/OpenRiskOps" class="text-blue-300">GitHub</a> |
+    <a href="https://github.com/youruser/OpenRiskOps/docs" class="text-blue-300">Docs</a> |
+    <a href="https://github.com/youruser/OpenRiskOps/blob/main/CONTRIBUTING.md" class="text-blue-300">Contribute</a>
+  </footer>
+</body>
+</html>

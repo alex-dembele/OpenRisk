@@ -1,0 +1,29 @@
+/* Custom styles on top of Tailwind */
+.tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.tab-button {
+  padding: 0.5rem 1rem;
+  background-color: #e5e7eb;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+#demo-modal {
+  z-index: 1000;
+}
