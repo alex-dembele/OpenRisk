@@ -1,8 +1,8 @@
-name: OpenRisk CI/CD
+name: OpenRiskOps CI/CD
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -19,20 +19,36 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
-      - name: Build and push images
+      - name: Build and push sync-engine image
         run: |
-          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest ./sync-engine
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest
-          # Repeat for dashboard backend/frontend; official images are pulled
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-sync-engine:latest ./sync-engine
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-sync-engine:latest
+      - name: Build and push dashboard-backend image
+        run: |
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-backend:latest ./dashboard/backend
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-backend:latest
+      - name: Build and push dashboard-frontend image
+        run: |
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-frontend:latest ./dashboard/frontend
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-frontend:latest
 
   test:
     runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install -r sync-engine/requirements.txt
+          pip install pytest  # Si tests avec pytest
       - name: Run unit tests
         run: |
-          # Add tests dir if not present; e.g., pytest sync-engine/tests.py
+          pytest sync-engine/tests.py  # Ajoutez des tests réels dans sync-engine/tests.py
+          # Ajoutez des tests pour dashboard/backend si nécessaire
 
   deploy:
     runs-on: ubuntu-latest
@@ -40,12 +56,17 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
       - name: Configure kubeconfig
-        run: echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
-      - name: Deploy to Kubernetes
         run: |
-          helm upgrade --install openrisk ./helm --namespace openrisk --create-namespace \
-            --set images.syncEngine=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest
-          # Update other images if custom
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+      - name: Deploy to Kubernetes with Helm
+        run: |
+          helm upgrade --install openriskops ./helm --namespace openriskops --create-namespace \
+            --set images.syncEngine=${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-sync-engine:latest \
+            --set images.dashboardBackend=${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-backend:latest \
+            --set images.dashboardFrontend=${{ secrets.DOCKER_HUB_USERNAME }}/openriskops-dashboard-frontend:latest
