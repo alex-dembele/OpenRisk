@@ -1,4 +1,4 @@
-# Installation Guide for OpenRiskOps
+# Installation Guide for OpenRisk
 
 ## Overview
 This guide covers deployment options for OpenRiskOps, including local development with Docker, production on bare Linux servers, and Kubernetes clusters. The platform is designed to be infrastructure-agnostic, but production deployments should prioritize security, scalability, and high availability.
@@ -76,3 +76,14 @@ If deploying into an existing setup (e.g., shared DB cluster):
 - Logs: `docker logs <container>` or `kubectl logs <pod>`
 - Common issues: Port conflicts (change in compose), insufficient resources (increase limits), auth errors (check .env).
 - Upgrades: Pull new images, `docker compose up -d --pull always`
+
+## Ease of Use
+- Use `make up` to get started.
+- Auto-refresh dashboard with fetch.
+- Sidebar navigation for sections.
+- Graphs for quick overview.
+
+## Ease of Deployment
+- `./deploy.sh` script for one-click deployment.
+- Makefile for common commands.
+- Production: Add HTTPS via NGINX proxy (example configuration in /nginx/prod.conf).
