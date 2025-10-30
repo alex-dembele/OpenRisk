@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: openrisk
+data:
+  prometheus.yml: |
+    scrape_configs:
+      - job_name: 'openrisk'
+        static_configs:
+          - targets: ['openrmf-web:8080', 'thehive:9000', 'cortex:9001', 'opencti:8080']
+          # Add all services with metrics endpoints

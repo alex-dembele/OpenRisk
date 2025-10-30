@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-frontend
+  namespace: openrisk
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dashboard-frontend
+  template:
+    metadata:
+      labels:
+        app: dashboard-frontend
+    spec:
+      containers:
+        - name: dashboard-frontend
+          image: alexdembele/openrisk-dashboard-frontend:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
