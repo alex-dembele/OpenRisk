@@ -70,7 +70,7 @@ function App() {
           <div className="grid md:grid-cols-2 gap-4">
             {risks.map((risk, index) => (
               <div key={index} className="bg-white p-4 rounded-lg shadow-md">
-                <h3 className="font-semibold">{risk.name || 'Risque non nommé'}</h3>
+                <h3 className="font-semibold">{risk.name || 'Unnamed risk'}</h3>
                 <p>{risk.description}</p>
               </div>
             ))}
@@ -103,7 +103,7 @@ function App() {
           <ul className="space-y-2">
             {actions.map((action, index) => (
               <li key={index} className="bg-white p-4 rounded-lg shadow-md">
-                <h3 className="font-semibold">{action.name || 'Action non nommée'}</h3>
+                <h3 className="font-semibold">{action.name || 'Unnamed action'}</h3>
                 <p>Statut: {action.status}</p>
               </li>
             ))}
@@ -118,7 +118,7 @@ function App() {
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <div className="w-64 bg-blue-800 text-white flex flex-col">
-        <h1 className="p-4 text-xl font-bold">OpenRiskOps</h1>
+        <h1 className="p-4 text-xl font-bold">OpenRisk</h1>
         <nav className="flex-1">
           {['risks', 'incidents', 'threats', 'actions'].map((section) => (
             <button
@@ -135,12 +135,12 @@ function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         <header className="bg-white shadow p-4">
-          <h2 className="text-2xl font-semibold">Tableau de bord</h2>
+          <h2 className="text-2xl font-semibold">Dashboard</h2>
         </header>
         <main className="flex-1 p-4 overflow-auto">
           {/* Overview Chart */}
           <div className="mb-6 bg-white p-4 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-2">Aperçu</h3>
+            <h3 className="text-lg font-semibold mb-2">Preview</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
