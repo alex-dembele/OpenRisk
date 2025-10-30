@@ -15,7 +15,7 @@ function App() {
     const fetchData = async () => {
       try {
         const [risksRes, incidentsRes, threatsRes, actionsRes] = await Promise.all([
-          fetch('http://localhost:8000/risks'),
+          fetch('http://localhost:8000/risks'), //Ajust to Backend domain name in production
           fetch('http://localhost:8000/incidents'),
           fetch('http://localhost:8000/threats'),
           fetch('http://localhost:8000/actions')
@@ -47,19 +47,19 @@ function App() {
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="text-xl">Chargement en cours...</div>
+      <div className="text-xl">Loading...</div>
     </div>
   );
   if (error) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 text-red-500">
-      <div>Erreur: {error}</div>
+      <div>Error: {error}</div>
     </div>
   );
 
   const chartData = [
-    { name: 'Risques', value: risks.length },
+    { name: 'Risks', value: risks.length },
     { name: 'Incidents', value: incidents.length },
-    { name: 'Menaces', value: threats.length },
+    { name: 'Threats', value: threats.length },
     { name: 'Actions', value: actions.length }
   ];
 
