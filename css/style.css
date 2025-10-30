@@ -1,0 +1,48 @@
+/* Custom Styles for Professional Look */
+.parallax-bg {
+  transform: translateZ(-1px) scale(1.1); /* Parallax effect */
+  background-attachment: fixed;
+}
+
+[data-theme="dark"] {
+  --bg-color: #1f2937;
+  --text-color: #f3f4f6;
+  --accent-color: #3b82f6;
+}
+
+body[data-theme="dark"] {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+body[data-theme="dark"] .bg-white {
+  background-color: #374151;
+}
+
+body[data-theme="dark"] .bg-gray-100 {
+  background-color: #1f2937;
+}
+
+.accordion-header:hover {
+  background-color: #e5e7eb;
+}
+
+.accordion-content {
+  background-color: #f9fafb;
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.transition {
+  transition: all 0.3s ease;
+}
+
+/* Toggle Switch for Dark Mode */
+#dark-mode-toggle {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 50;
+}
