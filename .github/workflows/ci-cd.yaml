@@ -44,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r sync-engine/requirements.txt
-          pip install pytest  # Si tests avec pytest
+          pip install pytest  
       - name: Run unit tests
         run: |
           pytest sync-engine/tests.py  # Ajoutez des tests réels dans sync-engine/tests.py
