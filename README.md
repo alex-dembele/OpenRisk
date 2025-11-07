@@ -1,4 +1,4 @@
-# OpenRisk - Unified Risk & Threat Intelligence Management Platform
+# OpenRisk - Unified Risk & Threat Intelligence Management Platform.
 
 ![Logo OpenRiskOps](logo.png)
 
