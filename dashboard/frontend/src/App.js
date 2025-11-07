@@ -167,8 +167,8 @@ function App() {
                 <Tooltip />
                 <Legend />
                 <Bar dataKey="value" fill="url(#boldGradient)" radius={[4, 4, 0, 0]} />
-              </ResponsiveContainer>
-            </motion.div>
+              </BarChart>
+            </ResponsiveContainer>
           </motion.div>
 
           <motion.div
