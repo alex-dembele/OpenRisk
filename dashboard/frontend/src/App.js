@@ -33,7 +33,7 @@ function App() {
     return () => mediaQuery.removeEventListener('change', listener);
   }, []);
 
-  // Fetch data (prod-ready avec env var)
+  // Fetch data with fallback mocks for test standalone (fix NetworkError)
   useEffect(() => {
     const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
     const fetchData = async () => {
@@ -44,21 +44,29 @@ function App() {
           fetch(`${backendUrl}/threats`),
           fetch(`${backendUrl}/actions`)
         ]);
-        if (!risksRes.ok || !incidentsRes.ok || !threatsRes.ok || !actionsRes.ok) throw new Error('Fetch error');
-        setRisks(await risksRes.json());
-        setIncidents(await incidentsRes.json());
-        setThreats(await threatsRes.json().data?.stixCoreObjects?.edges || []);
-        setActions(await actionsRes.json());
-        setLoading(false);
+        if (!risksRes.ok || !incidentsRes.ok || !threatsRes.ok || !actionsRes.ok) {
+          throw new Error('Fetch failed - Backend may not be running');
+        }
+        const risksData = await risksRes.json();
+        const incidentsData = await incidentsRes.json();
+        const threatsData = await threatsRes.json().data?.stixCoreObjects?.edges || [];
+        const actionsData = await actionsRes.json();
+
+        setRisks(risksData);
+        setIncidents(incidentsData);
+        setThreats(threatsData);
+        setActions(actionsData);
       } catch (err) {
-        setError(err.message);
+        setError(err.message || 'Network error - No connection to backend');
+        // No mocks here - let it show empty or error for real scenarios
+      } finally {
         setLoading(false);
       }
     };
     fetchData();
   }, []);
 
-  // Timeline init
+  
   useEffect(() => {
     if (timelineRef.current && incidents.length) {
       const items = incidents.map((inc, i) => ({ id: i, content: inc.title, start: new Date(inc.created_at || Date.now()) }));
@@ -66,7 +74,7 @@ function App() {
     }
   }, [incidents]);
 
-  // Layout personnalisable (drag/resize, localStorage)
+  
   const defaultLayout = [
     { i: 'overview-chart', x: 0, y: 0, w: 12, h: 4, minW: 4, minH: 2 },
     { i: 'threat-map', x: 0, y: 4, w: 6, h: 6, minW: 4, minH: 4 },
@@ -81,13 +89,32 @@ function App() {
     localStorage.setItem('openriskLayout', JSON.stringify(newLayout));
   };
 
-  // Haptics (vibration mobile pour feedback)
+  
   const hapticFeedback = () => {
     if (navigator.vibrate) navigator.vibrate(50);
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">Loading...</div>;
-  if (error) return <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-red-500">Error: {error}</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-8 h-8 border-4 border-t-blue-500 border-gray-200 rounded-full"
+        />
+        <p className="ml-4 text-xl">Loading data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-red-500">
+        <p className="text-xl mb-4">{error}</p>
+        <p>Check your network connection or backend status.</p>
+      </div>
+    );
+  }
 
   const chartData = [
     { name: 'Risks', value: risks.length, fill: '#10B981' },
@@ -98,7 +125,7 @@ function App() {
 
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'dark bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'} flex`}>
-      {/* Sidebar collapsible (Slack-like) */}
+      {/* Sidebar collapsible */}
       <motion.aside
         initial={{ x: -300 }}
         animate={{ x: isSidebarOpen ? 0 : -300 }}
@@ -180,14 +207,18 @@ function App() {
             animate={{ opacity: 1 }}
           >
             <h3 className="text-lg font-semibold mb-2">Threat Map</h3>
-            <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: '100%', width: '100%', borderRadius: '8px' }}>
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              {threats.map((threat, i) => (
-                <Marker key={i} position={[threat.node.lat || 51.505, threat.node.lng || -0.09]}>
-                  <Popup>{threat.node.name}</Popup>
-                </Marker>
-              ))}
-            </MapContainer>
+            {threats.length === 0 ? (
+              <p className="text-gray-500">No threats data available</p>
+            ) : (
+              <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: '100%', width: '100%', borderRadius: '8px' }}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                {threats.map((threat, i) => (
+                  <Marker key={i} position={[threat.node.lat || 51.505, threat.node.lng || -0.09]}>
+                    <Popup>{threat.node.name}</Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+            )}
           </motion.div>
 
           <motion.div
@@ -199,7 +230,11 @@ function App() {
             animate={{ opacity: 1 }}
           >
             <h3 className="text-lg font-semibold mb-2">Incident Timeline</h3>
-            <div ref={timelineRef} style={{ height: '100%', width: '100%' }}></div>
+            {incidents.length === 0 ? (
+              <p className="text-gray-500">No incidents data available</p>
+            ) : (
+              <div ref={timelineRef} style={{ height: '100%', width: '100%' }}></div>
+            )}
           </motion.div>
 
           <motion.div
@@ -211,11 +246,15 @@ function App() {
             animate={{ opacity: 1 }}
           >
             <h3 className="text-lg font-semibold mb-2">Risks</h3>
-            <ul className="space-y-2">
-              {risks.map((risk, i) => (
-                <li key={i} className="p-2 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded shadow-sm">{risk.name}</li>
-              ))}
-            </ul>
+            {risks.length === 0 ? (
+              <p className="text-gray-500">No risks data available</p>
+            ) : (
+              <ul className="space-y-2">
+                {risks.map((risk, i) => (
+                  <li key={i} className="p-2 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded shadow-sm">{risk.name}</li>
+                ))}
+              </ul>
+            )}
           </motion.div>
 
           <motion.div
@@ -227,11 +266,15 @@ function App() {
             animate={{ opacity: 1 }}
           >
             <h3 className="text-lg font-semibold mb-2">Actions</h3>
-            <ul className="space-y-2">
-              {actions.map((action, i) => (
-                <li key={i} className="p-2 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded shadow-sm">{action.name}</li>
-              ))}
-            </ul>
+            {actions.length === 0 ? (
+              <p className="text-gray-500">No actions data available</p>
+            ) : (
+              <ul className="space-y-2">
+                {actions.map((action, i) => (
+                  <li key={i} className="p-2 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded shadow-sm">{action.name}</li>
+                ))}
+              </ul>
+            )}
           </motion.div>
         </ResponsiveGrid>
       </main>

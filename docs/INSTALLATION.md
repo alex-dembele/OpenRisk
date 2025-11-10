@@ -16,6 +16,7 @@ This guide covers deployment options for OpenRiskOps, including local developmen
 1. Clone the repository: `git clone https://github.com/alex-dembele/OpenRisk.git`
 2. Navigate to the root: `cd OpenRisk`
 3. Copy `.env.example` to `.env` and fill in secrets (e.g., API keys, DB passwords).
+   - Run: `./deploy.sh` (for easy deployment) It checks prereqs, configures the .env (edit manually), and builds.
 4. Build and start: `docker compose up -d --build`
 5. Access services:
    - Dashboard: http://localhost:3000
@@ -28,16 +29,17 @@ This guide covers deployment options for OpenRiskOps, including local developmen
 ## Production Deployment with Docker on Linux Server
 For production, use a dedicated server or VM. Enable HTTPS, persistent storage, and monitoring.
 
-1. Install Docker and Compose: Follow official docs[](https://docs.docker.com/engine/install/).
-2. Clone repo and configure `.env` with production values (e.g., strong passwords, external DB URIs if using managed services like AWS RDS).
-3. Update `docker-compose.yml` for production:
+1. Install Docker and Compose: Follow official docs[](https://docs.docker.com/engine/install/). 
+2. Login Docker : `docker login`
+3. Clone repo and configure `.env` with production values (Copy .env: `cp .env.example .env` and edit secrets.).
+4. Update `docker-compose.yml` for production:
    - Change ports to 443 for HTTPS.
    - Mount persistent volumes (e.g., /opt/openriskops/volumes).
    - Set `restart: always` for all services.
    - Use production images (e.g., tagged versions instead of :latest).
-4. Build and start: `docker compose up -d --build --force-recreate`
-5. Configure NGINX reverse proxy for HTTPS (example config in /openrmf/nginx.conf).
-6. Set up systemd service for auto-start: Create /etc/systemd/system/openrisk.service
+5. Build and start: `docker compose up -d --build --force-recreate`
+6. Configure NGINX reverse proxy for HTTPS (example config in /openrmf/nginx.conf).
+7. Set up systemd service for auto-start: Create /etc/systemd/system/openrisk.service
 `
 [Unit]
 Description=OpenRiskOps
@@ -51,8 +53,8 @@ Restart=always
 WantedBy=multi-user.target
 `
    Enable: `systemctl enable openrisk`
-7. Monitoring: Access Grafana at http://localhost:3001 (default admin/admin).
-8. Backups: Schedule cronjobs for volume backups, e.g., `rsync -a /var/lib/docker/volumes /backup/`.
+1. Monitoring: Access Grafana at http://localhost:3001 (default admin/admin).
+2. Backups: Schedule cronjobs for volume backups, e.g., `rsync -a /var/lib/docker/volumes /backup/`.
 
 ## Deployment on Kubernetes
 1. Create namespace: `kubectl apply -f k8s/namespace.yaml`
@@ -73,9 +75,13 @@ If deploying into an existing setup (e.g., shared DB cluster):
 6. Logging: Integrate with ELK stack or Splunk by mounting /var/log.
 
 ## Troubleshooting
-- Logs: `docker logs <container>` or `kubectl logs <pod>`
-- Common issues: Port conflicts (change in compose), insufficient resources (increase limits), auth errors (check .env).
-- Upgrades: Pull new images, `docker compose up -d --pull always`
+- **Logs**: `docker logs <container>` or `kubectl logs <pod>`
+- **Common issues**: Port conflicts (change in compose), insufficient resources (increase limits), auth errors (check .env).
+- **Upgrades**: Pull new images, `docker compose up -d --pull always`
+- **Pull Access Denied**: Log in to Docker; check if images exist (e.g., quay.io/keycloak/keycloak:latest public).
+- **Busy Ports**: `netstat -tuln | grep 8080` and kill the process.
+- **Rate Limits**: Use a Docker account.
+- **Backend Errors**: Check .env tokens; restart the service with `docker compose restart backend`.
 
 ## Ease of Use
 - Use `make up` to get started.
@@ -86,4 +92,8 @@ If deploying into an existing setup (e.g., shared DB cluster):
 ## Ease of Deployment
 - `./deploy.sh` script for one-click deployment.
 - Makefile for common commands.
-- Production: Add HTTPS via NGINX proxy (example configuration in /nginx/prod.conf).
+
+## Product Tips
+- HTTPS: Add an NGINX proxy (e.g., Docker service with Certbot).
+- Scaling: Use Kubernetes manifests.
+- Backups: `docker volume backup mongo-data`.
