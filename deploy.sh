@@ -1,20 +1,27 @@
 #!/bin/bash
 set -e
 
-echo "Cloning the repo..."
-git clone https://github.com/alex-dembele/OpenRiskOps.git || cd OpenRisk
-cd OpenRisk
+echo "Vérification prerequisites..."
+command -v docker > /dev/null || { echo "Docker non installé. Installez via https://docs.docker.com/install"; exit 1; }
+command -v docker compose > /dev/null || { echo "Docker Compose non installé. Installez via https://docs.docker.com/compose/install"; exit 1; }
 
-echo "Configuring .env..."
-cp .env.example .env
-# Edit .env manually or automatically with read -s for passwords
+echo "Login Docker (optionnel pour éviter rate-limits)..."
+docker login || echo "Login skipped – Si erreurs pull, créez compte hub.docker.com et retry."
 
-echo "Build and start..."
-make build
-make up
+echo "Configuration .env..."
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "Éditez .env avec vos secrets (ex. nano .env)"
+  exit 0
+fi
 
-echo "Verifying..."
+echo "Build et démarrage..."
+docker compose build
+docker compose up -d
+
+echo "Vérification services..."
 docker compose ps
 
-echo "Dashboard ready! http://localhost:3000"
-echo "Configure API keys in .env and reboot if needed."
+echo "OpenRisk prêt ! Dashboard: http://localhost:3000"
+echo "Si erreurs, voir logs: docker compose logs"
+echo "Troubleshooting: Vérifiez ports libres (netstat -tuln), volumes (docker volume ls), ou login Docker."

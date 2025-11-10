@@ -13,10 +13,12 @@ services:
       retries: 5
 
   openrmf-keycloak:
-    image: jboss/keycloak:23.0.0
+    image: quay.io/keycloak/keycloak:latest 
+    command: start  
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres  
     volumes:
       - keycloak-data:/opt/keycloak/data
     ports:
