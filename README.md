@@ -1,6 +1,6 @@
 # OpenRisk - Unified Risk & Threat Intelligence Management Platform.
 
-![Logo OpenRiskOps](logo.png)
+![Logo OpenRisk](OpenRisk.png)
 
 ## Overview
 OpenRisk is an open-source platform that integrates OpenRMF, TheHive, Cortex, and OpenCTI to centralize risk management, incidents, threats, and corrective actions. It is infrastructure-agnostic, supporting Docker, Kubernetes, or bare Linux servers. The project is designed with production deployment in mind, using official production images where available, multi-stage Docker builds for custom components, secure configurations, and observability.
