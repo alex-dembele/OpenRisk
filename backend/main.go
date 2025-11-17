@@ -2,41 +2,54 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"net/http"
+	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
+	"os"
+	"github.com/gin-contrib/ratelimit"
+	"time"
+	"golang.org/x/time/rate"
+	"github.com/gin-contrib/cors"
 )
 
-var db *gorm.DB
-
 func main() {
-	dsn := "host=postgres user=openrisk password=secret dbname=openrisk port=5432 sslmode=disable"
-	var err error
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		panic("failed to connect database")
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
+	if err := InitDB(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to init DB")
 	}
+	log.Info().Msg("DB connected and migrated")
 
 	r := gin.Default()
-	r.Use(JWTMiddleware()) 
 
+	// Prod middlewares
+	r.Use(gin.Recovery())
+	r.Use(cors.Default()) // CORS for frontend
+	r.Use(ratelimit.New(rate.Limit(10), rate.Every(time.Minute))) // Rate limit 10/min
+	r.Use(LoggerMiddleware()) // Audit logs
+	r.Use(JWTMiddleware()) // RBAC
+
+	// Routes
 	r.GET("/risks", GetRisks)
-	r.Run(":8000")
-}
+	r.POST("/risks", CreateRisk)
+	r.GET("/risks/:id", GetRisk)
+	r.PUT("/risks/:id", UpdateRisk)
+	r.DELETE("/risks/:id", DeleteRisk)
 
-func GetRisks(c *gin.Context) {
-	var risks []Risk 
-	if err := db.Find(&risks).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, risks)
-}
+	r.GET("/plans", GetPlans)
+	r.POST("/plans", CreatePlan)
+	r.GET("/plans/:id", GetPlan)
+	r.PUT("/plans/:id", UpdatePlan)
+	r.DELETE("/plans/:id", DeletePlan)
 
+	r.GET("/history/:risk_id", GetHistory)
 
-func JWTMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		
-		c.Next()
-	}
+	r.POST("/exports/pdf", ExportPDF)
+	r.POST("/exports/csv", ExportCSV)
+	r.POST("/exports/json", ExportJSON)
+
+	r.POST("/integrate/openasset", IntegrateOpenAsset) 
+	
+
+	r.Run(":8000") // Prod: Use env PORT, TLS gin.RunTLS
 }

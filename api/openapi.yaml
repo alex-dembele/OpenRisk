@@ -2,19 +2,72 @@ openapi: 3.0.0
 info:
   title: OpenRisk API
   version: 1.0.0
+  description: API for risk management
 paths:
   /risks:
     get:
       summary: List risks
+      security: [{bearerAuth: []}]
       responses:
         '200':
-          description: Risks array
+          description: Risks list
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Risk'
+    post:
+      summary: Create risk
+      security: [{bearerAuth: []}]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Risk'
+      responses:
+        '201':
+          description: Created risk
+  /risks/{id}:
+    get:
+      summary: Get risk
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Risk details
+    put:
+      summary: Update risk
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Risk'
+      responses:
+        '200':
+          description: Updated risk
+    delete:
+      summary: Delete risk
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+# Add paths for /plans, /history, /exports, /integrate/*
 components:
   schemas:
     Risk:
@@ -22,8 +75,31 @@ components:
       properties:
         id:
           type: string
+          format: uuid
         name:
           type: string
         probability:
           type: integer
-        
+        impact:
+          type: integer
+        criticality:
+          type: integer
+        asset_id:
+          type: string
+          format: uuid
+        owner_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [Open, Mitigated, Closed]
+        tags:
+          type: string
+        custom_fields:
+          type: string
+    # Add MitigationPlan, History
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
