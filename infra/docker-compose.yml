@@ -211,23 +211,23 @@ services:
     env_file:
       - .env
 
-  dashboard-backend:
-    build: ./dashboard/backend
+  backend:
+    build: ../backend  # Go build
+    depends_on:
+      - postgres
     ports:
       - "8000:8000"
-    depends_on:
-      - sync-engine
     restart: always
-    env_file:
-      - .env
+    environment:
+      DB_DSN: "host=postgres user=openrisk password=secret dbname=openrisk port=5432"
 
-  dashboard-frontend:
-    build: ./dashboard/frontend
+  frontend:
+    build: ../frontend
     ports:
       - "3000:3000"
-    depends_on:
-      - dashboard-backend
     restart: always
+    environment:
+      REACT_APP_BACKEND_URL: http://backend:8000
 
   prometheus:
     image: prom/prometheus:latest

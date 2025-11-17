@@ -1,0 +1,29 @@
+openapi: 3.0.0
+info:
+  title: OpenRisk API
+  version: 1.0.0
+paths:
+  /risks:
+    get:
+      summary: List risks
+      responses:
+        '200':
+          description: Risks array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Risk'
+components:
+  schemas:
+    Risk:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        probability:
+          type: integer
+        
