@@ -1,8 +1,129 @@
+/* Tailwind Directives for Base/Components/Utilities */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Global Resets for Clean/Professional UX (Inspired Notion/Linear: Anti-Aliasing, Smooth Scroll) */
+:root {
+  --primary: #1E40AF; /* Bold blue */
+  --accent: #10B981; /* Green gradient */
+  --neutral: #F3F4F6; /* Light bg */
+  --dark-neutral: #1F2937; /* Dark bg */
+}
 
 body {
-  font-family: 'Inter', sans-serif; 
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  background-color: var(--neutral);
+  color: #111827; /* Bold text */
+  transition: background-color 0.3s ease, color 0.3s ease; /* Seamless theme switch */
+}
+
+.dark body {
+  background-color: var(--dark-neutral);
+  color: #F9FAFB;
+}
+
+/* Neumorphisme for Cards/Buttons (Soft 3D Shadows, Inspired Dribbble Trends) */
+.neumorphic-card {
+  background: #f0f0f0; /* Light neutral */
+  box-shadow: 9px 9px 16px rgba(189, 189, 189, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.dark .neumorphic-card {
+  background: #1f2937;
+  box-shadow: 9px 9px 16px rgba(0, 0, 0, 0.6), -9px -9px 16px rgba(55, 65, 81, 0.5);
+}
+
+.neumorphic-card:hover {
+  box-shadow: 4px 4px 8px rgba(189, 189, 189, 0.4), -4px -4px 8px rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px); /* Micro-lift on hover for addictive feel */
+}
+
+.dark .neumorphic-card:hover {
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.4), -4px -4px 8px rgba(55, 65, 81, 0.3);
+}
+
+/* Neumorphic Buttons with Bold Gradients (Duotone Bleu-Vert, Concave Hover) */
+.neumorphic-button {
+  background: linear-gradient(145deg, var(--primary), var(--accent));
+  box-shadow: 4px 4px 8px rgba(30, 64, 175, 0.4), -4px -4px 8px rgba(16, 185, 129, 0.4);
+  border-radius: 8px;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600; /* Bold typography */
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.neumorphic-button:hover {
+  box-shadow: inset 4px 4px 8px rgba(30, 64, 175, 0.3), inset -4px -4px 8px rgba(16, 185, 129, 0.3); /* Concave effect for tactile feel */
+  transform: translateY(1px);
+}
+
+/* Layout and Spacing for Zéro Clutter (Large Whitespace, Inspired Notion) */
+.layout {
+  min-height: 100vh;
+  padding: 2rem;
+  display: grid;
+  gap: 2rem; /* Generous spacing */
+}
+
+@media (max-width: 768px) {
+  .layout {
+    padding: 1rem;
+    gap: 1rem; /* Responsive adjustment */
+  }
+}
+
+/* Bold Typography (Inspired Pinterest Collections: Clear, Readable) */
+h1, h2, h3 {
+  font-weight: 700; /* Bold */
+  letter-spacing: -0.025em; /* Tight tracking for modern look */
+}
+
+h1 {
+  font-size: 2.25rem;
+}
+
+h2 {
+  font-size: 1.875rem;
+}
+
+h3 {
+  font-size: 1.25rem;
+}
+
+/* Dark Mode Overrides for Seamless Transition */
+.dark {
+  --neutral: #1F2937;
+  --text-color: #F9FAFB;
+}
+
+/* Cursor/Interactions for Addictive UX (Grab for Drag Widgets) */
+.cursor-grab {
+  cursor: grab;
+}
+
+.active:cursor-grabbing {
+  cursor: grabbing;
+}
+
+/* Additional Utilities for Heatmaps/Charts (Bold Colors) */
+.recharts-tooltip-wrapper {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dark .recharts-tooltip-wrapper {
+  background: rgba(31, 41, 55, 0.9);
+  color: #F9FAFB;
 }

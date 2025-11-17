@@ -7,3 +7,4 @@ docker-compose.override.yml
 volumes/
 k8s/secrets/
 dashboard/frontend/node_modules
+frontend/node_modules
