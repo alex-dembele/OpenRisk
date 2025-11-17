@@ -1,0 +1,13 @@
+FROM golang:1.23 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . /app
+RUN CGO_ENABLED=0 GOOS=linux go build -o /openrisk-backend ./main.go
+
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY --from=builder /openrisk-backend /openrisk-backend
+EXPOSE 8000
+USER nonroot:nonroot
+CMD ["/openrisk-backend"]

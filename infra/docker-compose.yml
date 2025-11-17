@@ -125,17 +125,16 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: openriskops
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: openriskops
+      POSTGRES_USER: ${POSTGRES_USER:-openrisk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: openrisk
     volumes:
       - pg-data:/var/lib/postgresql/data
-    restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openriskops"]
+      test: ["CMD", "pg_isready", "-U", "openrisk"]
       interval: 10s
-      timeout: 5s
       retries: 5
+    restart: always 
 
   redis:
     image: redis:7
@@ -212,22 +211,28 @@ services:
       - .env
 
   backend:
-    build: ../backend  # Go build
+    build:
+      context: ../backend
+      dockerfile: ../infra/Dockerfile.backend
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    restart: always
     environment:
-      DB_DSN: "host=postgres user=openrisk password=secret dbname=openrisk port=5432"
+      DB_DSN: "host=postgres user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=openrisk port=5432 sslmode=disable"
+      JWT_SECRET: ${JWT_SECRET}
+    restart: always
 
   frontend:
-    build: ../frontend
+    build:
+      context: ../frontend
+      dockerfile: ../infra/Dockerfile.frontend
     ports:
-      - "3000:3000"
-    restart: always
+      - "3000:80"
     environment:
-      REACT_APP_BACKEND_URL: http://backend:8000
+      VITE_BACKEND_URL: http://backend:8000
+    restart: always
 
   prometheus:
     image: prom/prometheus:latest

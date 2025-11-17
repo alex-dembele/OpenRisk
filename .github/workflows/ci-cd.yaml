@@ -77,23 +77,27 @@ jobs:
   #         cd sync-engine
   #         pytest tests.py || echo "Tests failed - Check code"  # Graceful if file missing, but now exists
 
-  # deploy:
-  #   runs-on: ubuntu-latest
-  #   needs: test
-    # if: github.ref == 'refs/heads/main'
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Set up Helm
-  #       uses: azure/setup-helm@v4
-  #     - name: Set up kubectl
-  #       uses: azure/setup-kubectl@v4
-  #     - name: Configure kubeconfig
-  #       run: |
-  #         mkdir -p ~/.kube
-  #         echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
-  #     - name: Deploy to Kubernetes with Helm
-  #       run: |
-  #         helm upgrade --install openrisk ./helm --namespace openrisk --create-namespace \
-  #           --set images.frontend=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-frontend:latest \
-  #           --set images.backend=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-backend:latest \
-  #           --set images.syncEngine=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-sync-engine:latest
+# deploy:
+#   runs-on: ubuntu-latest
+#   needs: test
+#   if: github.ref == 'refs/heads/main'
+#   steps:
+#     - uses: actions/checkout@v4
+#     - name: Lint Helm Chart
+#       run: helm lint infra/helm
+#     - name: Set up Helm
+#       uses: azure/setup-helm@v4
+#     - name: Set up kubectl
+#       uses: azure/setup-kubectl@v4
+#     - name: Configure kubeconfig
+#       run: |
+#         mkdir -p ~/.kube
+#         echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+#     - name: Deploy to K8s
+#       run: |
+#         helm upgrade --install openrisk infra/helm --namespace openrisk --create-namespace \
+#           --set backend.image=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-backend:latest \
+#           --set frontend.image=${{ secrets.DOCKER_HUB_USERNAME }}/openrisk-frontend:latest \
+#           --set dbDsn=${{ secrets.DB_DSN }} \
+#           --set jwtSecret=${{ secrets.JWT_SECRET }} \
+#           --set postgresPassword=${{ secrets.POSTGRES_PASSWORD }}

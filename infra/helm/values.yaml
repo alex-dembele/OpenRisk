@@ -1,25 +1,32 @@
-replicaCount: 1  # Default, override for prod
+replicaCount: 3  # Autoscaling
 
-images:
-  mongo: mongo:7.0
-  keycloak: jboss/keycloak:23.0.0
-  openrmfWeb: cingulara/openrmf-web:1.13.00
-  # List all
+backend:
+  image: yourrepo/openrisk-backend:latest
+  pullPolicy: Always
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
-secrets:
-  mongoUri: mongodb://mongo:27017/openrmf
-  # Base64 or externalSecret
+frontend:
+  image: yourrepo/openrisk-frontend:latest
+  pullPolicy: Always
 
-persistence:
-  enabled: true
-  storageClass: ""
-  size: 10Gi
+postgres:
+  image: postgres:16
+  persistence:
+    enabled: true
+    size: 10Gi
+
+service:
+  type: LoadBalancer
+  port: 80
 
 ingress:
-  enabled: false
-  className: ""
+  enabled: true
+  className: "nginx"
   hosts:
-    - host: openriskops.example.com
+    - host: openrisk.example.com
       paths:
         - path: /
-          pathType: ImplementationSpecific
+          pathType: Prefix

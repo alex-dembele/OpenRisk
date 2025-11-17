@@ -1,5 +1,6 @@
 apiVersion: v2
 name: openrisk
-description: Helm chart for deploying OpenRisk platform
-version: 0.1.0
-appVersion: "1.0"
+description: OpenRisk Helm Chart for K8s Prod
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
