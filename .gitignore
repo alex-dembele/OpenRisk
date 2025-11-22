@@ -1,8 +1,21 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Binaries & Builds
+/bin/
+/dist/
+/build/
+*.exe
+backend/openrisk-api
+
+# Dependencies
+node_modules/
+/backend/vendor/
+
+# Environment
 .env
-docker-compose.override.yml
-volumes/
-k8s/secrets/
+.env.*
+!.env.example
+.DS_Store
+
+# Infrastructure Local Data
+postgres_data/
+redis_data/
+legacy_v1/
