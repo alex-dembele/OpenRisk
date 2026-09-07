@@ -39,13 +39,13 @@ import (
 // handlers enforce entitlements internally. What the list records is that the
 // middleware layer does not decide, so something else must.
 //
-// #529 audited all 92 and judged each one. 15 were wrong and now carry a guard
-// (billing plan verbs, the integration connectivity probe, the custom-field
+// #529 audited all 92 and judged each one. 14 were wrong and now carry a guard
+// (billing checkout, the integration connectivity probe, the custom-field
 // definitions, bulk operations, and the seven per-risk history reads that every
 // other /risks/* read already gated). Two more — creating and revoking a
 // governance delegation — kept the open route on purpose and gained the missing
 // authority check inside the use case instead, because who may act there is a
-// property of the record, not of the path. The 77 below are the survivors: each
+// property of the record, not of the path. The 78 below are the survivors: each
 // is either the caller's own resource or enforced inside its handler, and each
 // mount site in main.go now says which.
 // ---------------------------------------------------------------------------
@@ -120,6 +120,10 @@ var routesWithoutPermissionGuard = []string{
 	"POST /auth/mfa/disable",
 	"POST /auth/pat",
 	"POST /auth/switch-org",
+	// D-034: deliberately open. Starting a trial spends nothing and sits on the
+	// activation path; checkout, which opens a payment session in the
+	// organisation's name, is admin-only.
+	"POST /billing/trial",
 	"POST /governance/approvals",
 	"POST /governance/approvals/:id/cancel",
 	"POST /governance/approvals/:id/decide",

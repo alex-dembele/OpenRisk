@@ -5,208 +5,173 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-### D-034 — billing self-service narrowed to admins by the #529 authz audit · 2026-09-07
-**Escalated by** — the #529 audit of the 92 protected routes carrying no permission
-guard. Implemented on that branch and shipped as part of its PR, because leaving the
-routes open while waiting was the worse of the two states. **Reverting is one line
-each** if the owner disagrees.
-
-**What changed** — `POST /billing/trial` and `POST /billing/checkout` now carry
-`middleware.RequireRole("admin", "root")`, the same guard `POST /billing/change-plan`
-and `POST /billing/cancel` already had. `GET /billing` and `GET /entitlements` are
-untouched: every member still reads the plan and the paywall snapshot.
-
-**Why** — the mount site said *"Billing self-service is available to any member; the
-admin-only verbs (manual plan change, cancel) are guarded by role."* But starting a
-trial burns the organisation's one trial window (the service returns
-`ErrAlreadySubscribed` on the second attempt), and checkout opens a hosted payment
-session in the organisation's name. Both move the tenant onto a different plan, which
-is the same class of act as change-plan — the asymmetry read as an oversight rather
-than a decision. CLAUDE.md requires anything touching pricing or costing money to reach
-the owner, hence this entry.
-
-**What it costs if wrong** — a non-admin evaluating OpenRisk cannot start the trial
-themselves and has to ask an admin. That is friction on the activation path, and it is
-the reason this is a decision and not a bug fix.
-
-**The owner's call, one of:**
-- **A (implemented)** — both verbs admin-only. Consistent with change-plan/cancel.
-- **B** — trial stays open to any member, checkout goes admin-only. Keeps
-  self-service evaluation, guards the money.
-- **C** — revert both. Self-service was deliberate and the trial window is cheap.
-
-**Recommendation** — A. If activation data later shows non-admin trial starts mattered,
-B is the compromise and costs one line.
-
-**Blocks** — nothing. #529's PR ships either way.
-
-### D-029 — release trains replace the eight waves as the planning unit · raised 2026-09-04 · **pending**
-**Raised by** — `po-openrisk`, executing the founder's strategic note of 2026-09-04.
-**Issues** — #570 (epic) and the six new milestones.
-
-**The question** — Axe F of the note asks for "des releases thématiques (ex: Release 1.2 -
-Risk Auto-Draft)" instead of technical waves. I have created six milestones — `Release 1.2 —
-Risk Data Plane` through `Release 1.6 — IT-native & Ecosystem`, plus `Backlog — deferred
-(Tier 5)` — and moved 46 open issues into them. **The eight `Wave` milestones still exist and
-still hold 44 open issues.** That is the decision: do the waves get retired, with their
-remaining issues redistributed, or do both families coexist?
-
-**Recommendation** — **retire the waves, redistribute their issues.** Two milestone families
-is the same mistake D-003 accepted for labels, and the cost there is visible: every issue now
-carries two priority labels that can disagree, and they do. Milestones are worse than labels
-for this, because a milestone is what a burn-down and the `/plan-milestone` skill read. An
-issue in `Wave 4 — GRC` and an issue in `Release 1.4 — Evidence Fabric` cannot both be "the
-current milestone". If the owner prefers to keep the waves as an archive, they should be
-closed rather than left open, so nothing new can be filed into them.
-
-**What I did not do** — I did not retire them. Reshaping milestone scope is an escalation
-under CLAUDE.md, so the waves are untouched and the moves I made are reversible one by one.
-
-**Cost of delay** — moderate and rising. Until this is answered the backlog has two competing
-plans, and every new issue forces an agent to guess which family it belongs to. Answer before
-the next milestone planning round.
-
----
-
-### D-030 — adopt the OpenRisk Canonical Model, and commit to OSCAL as an interchange format · raised 2026-09-04 · **pending**
-**Raised by** — `po-openrisk`. **Issues** — #541, #542, #543, #566, epic #535.
-
-**The question** — two commitments, one decision, because the second is only worth making if
-the first is:
-
-1. **A canonical domain model** — 17 entities with a mandatory envelope (`source`,
-   `source_id`, `source_version`, `observed_at`, `confidence`, `provenance`, `relationships`)
-   and a fixed relationship vocabulary, published as `openrisk-schema.json` with a semver
-   compatibility promise. This is the largest architectural commitment in the project's
-   history: it touches every table, every integration and every module, and once external
-   parties build against the published schema, breaking it costs them, not just us.
-2. **OSCAL** — NIST's machine-readable format for controls, profiles, implementations and
-   assessment results, as our import/export interchange. This is a dependency on an external
-   standard's evolution.
-
-**Recommendation** — **accept both, in that order, with 1 as an ADR before any code.** The
-note's argument is right and it is the strategic core of the whole document: without a
-canonical model we accumulate connectors until they are unmaintainable, and every automation
-ambition in the roadmap sits on sand. OSCAL is a smaller decision and a large credibility
-return with regulated and public-sector buyers — but it is only coherent *after* the canonical
-model, because OSCAL then maps onto something stable rather than onto our current table shapes.
-
-**What this costs if wrong** — a canonical model that turns out to be badly factored is
-expensive to change after external adoption, which is exactly why #541 asks for an ADR and an
-explicit out-of-scope list rather than an implementation.
-
-**Cost of delay** — high. Eleven open issues are blocked behind #541, and both killer
-workflows depend on it. This is the decision to answer first.
-
----
-
-### D-031 — nine issues are deferred to Tier 5 · raised 2026-09-04 · **pending confirmation**
-**Raised by** — `po-openrisk`. **Issues** — #509, #510, #511, #512, #513, #397, #222, #205, #403.
-
-**The question** — the note is explicit that exotic visualisations, the Digital Twin and
-Attack Path work should not precede the risk-to-evidence-to-mitigation chain. I have moved
-those nine to `Backlog — deferred (Tier 5)` and commented the reason on each. Cutting scope is
-an escalation, so this is here for confirmation rather than as a fait accompli.
-
-- **Charts** (#509 Sankey, #510 Choropleth, #511 Candlestick, #512 Scatter, #513 Brush) — none
-  has an identified consumer. #512 says so in its own title.
-- **Too early** (#397 and #222 Digital Twin, #205 Attack Graph, #403 blast radius) — all four
-  are graph and simulation work whose output quality is capped by data quality. Built before
-  the Risk Data Plane, they simulate our normalization gaps rather than the customer's
-  environment.
-
-**Recommendation** — **confirm.** Nothing is closed; every spec survives intact and returns
-the moment a Tier 1 or Tier 2 issue names it as a requirement, which is a stronger position
-than being built speculatively now.
-
-**Cost of delay** — none. The moves are already made and are reversible in one command each.
-Say the word if any of the nine should come back.
-
----
-
-### D-032 — a `tier:` label prefix, or tiers stay in milestones only · raised 2026-09-04 · **pending**
-**Raised by** — `po-openrisk`. **Issue** — #570.
-
-**The question** — the note's tier model (Tier 0 Trust · 1 Product engine · 2 Killer workflows ·
-3 Ecosystem · 4 UX · 5 Deferred) is the sharpest instrument in the whole document, and it is
-the one thing I could not implement. CLAUDE.md says the label taxonomy is fixed and no agent
-invents a prefix. So tiers currently live only in milestone names and in #570's body, where
-they cannot be filtered on.
-
-**Recommendation** — **authorise a `tier:` prefix with exactly those six values, and no
-seventh.** A tier is orthogonal to `priority:` and answers a different question: priority says
-how urgent, tier says how strategic, and the note's entire argument is that we keep confusing
-the two. The cost is one more label per issue on a repository that D-003 already committed to
-double-labelling. The alternative — tiers as milestones only — means an issue's tier changes
-when it is scheduled, which defeats the purpose.
-
-**If the answer is no**, that is a perfectly workable outcome: #570 then records tiers in
-`ROADMAP.md` as a static table, and the milestone name carries the signal. Say so and I will
-stop asking.
-
-**Cost of delay** — low. #570 proceeds either way.
-
----
-
-### D-033 — the positioning line, after the name is settled · raised 2026-09-04 · **pending**
-**Raised by** — `po-openrisk`. **Issues** — #571 (`status:blocked`), depends on #492.
-
-**The question** — the note proposes replacing *Unified Risk & Threat Intelligence Management
-Platform* with a line built on "continuous risk intelligence", offering three candidates, and
-proposes replacing the internal "anti-spreadsheet" framing with "anti-manual-control-plane".
-Brand naming and positioning are owner-only.
-
-**Recommendation** — **do not decide this yet.** #492 has not settled OpenRisk versus Karath,
-and a tagline chosen before the name is a tagline written twice. More importantly, every
-candidate line is a *claim about continuous behaviour we have not shipped*: under ABSOLUTE
-RULE 12 we may not put "continuous risk intelligence" on a website until #535 and #536 are
-real. The right sequence is #492, then the killer workflow, then the line — tested on the
-three pilot organisations from #494 rather than chosen in a room.
-
-**Cost of delay** — none until the GTM milestone needs public copy. #571 is parked at
-`status:blocked` and will not be picked up.
-
----
-
-### D-028 — where the `Idempotency-Key` record lives, and which endpoints must carry it · raised 2026-09-03 · **pending**
-**Raised by** — `po-openrisk`, splitting #335. **Issue** — #517 (`status:needs-refinement`).
-
-**The question** — #335 was one issue bundling a P0 transactional-write bug with a new
-cross-cutting mechanism. The bug is now #335 alone and ships this week. The mechanism is #517
-and cannot start until two things are decided:
-
-1. **Storage.** Redis (already in the stack, TTL for free, but a lost key silently degrades to
-   today's behaviour and the guarantee we document becomes conditional) versus a PostgreSQL
-   table (durable, commits in the same transaction as the write it protects, but a new table and
-   a migration).
-2. **Reach.** Which mutation endpoints must carry the header, and whether it is optional or
-   required. Requiring it is a breaking change for every existing client.
-
-Three further design questions — key scope (key alone, or key + tenant + body hash),
-concurrency semantics, and retention — are `tech-lead`'s to settle, not the owner's, once 1 and
-2 are answered.
-
-**Recommendation** — **PostgreSQL, and optional on every mutation endpoint.** Redis is
-attractive until you write the sentence we would have to publish: "retrying is safe unless the
-cache evicted your key", which is not a guarantee an integrator can build on. A durable record
-that commits with the write is the only version that is true. Optional-not-required because
-requiring the header breaks existing clients for a benefit only retrying clients need; make it
-honoured when present, and document it. Recommend an ADR: this touches every mutation endpoint
-and the reasoning should outlive the issue.
-
-**Cost of delay** — low and bounded, which is exactly why the split was made. #335 removes the
-cause of the duplicates users are actually reporting; what remains uncovered is the retry after
-a response that never arrived. Nothing blocks on this until an integrator asks for a retry
-guarantee, or until #239 (W8-06, Wave 8) reaches its idempotency line and finds no design. It
-should not, however, sit unanswered past Wave 8 planning.
-
-**Not urgent. Answer at the next convenient decision round, not ahead of anything on Wave 1.**
-
----
+None. Every entry in this register is resolved as of 2026-09-07.
 
 ## Resolved
 
 <!-- Append: date · decision · rationale · issues unblocked -->
+
+### D-034 — billing: the trial stays self-service, checkout goes admin-only · 2026-09-07
+**Decided** — Option B, **against the implementation on the branch** (which was A, both
+admin-only). `POST /billing/checkout` keeps `middleware.RequireRole("admin", "root")`;
+`POST /billing/trial` returns to any authenticated member.
+
+**Rationale (owner)** — Checkout opens a hosted payment session in the organisation's name
+and belongs with `change-plan` and `cancel`. Burning a trial window is recoverable, and the
+trial sits on the activation path, which is the one place friction costs deals. The
+asymmetry the #529 audit flagged was real for checkout and not for trial.
+
+**Consequence** — one line changed on PR #577 before merge. `POST /billing/trial` therefore
+stays in `routesWithoutPermissionGuard` in
+`backend/internal/handler/authz_route_coverage_test.go` (78 entries, not 77), with the
+reason at its mount site: **the guard is deliberately absent, not missing.** `GET /billing`
+and `GET /entitlements` were never in question. The audit's verdict on the other 16 findings
+is unaffected.
+**Unblocked** — PR #577 may merge.
+
+### D-033 — the positioning line and the internal framing · 2026-09-07
+**Decided** — *The Operating System for Organizational Cyber Risk*, chosen **over the
+recommendation**, which was to defer until #492 settles the name. Internal framing: **both**
+— "anti-spreadsheet" facing customers, "anti-manual-control-plane" in specs and
+architecture.
+
+**Rationale (owner)** — Decided now rather than sequenced behind #492 and the killer
+workflow. Recorded plainly because the recommendation cut the other way and a future reader
+should not have to reconstruct that the sequencing argument was made and overruled.
+
+**Consequence, and the two things this does NOT unblock —**
+1. **The name is still open.** #492 has not settled OpenRisk versus Karath. The line is
+   decided; the word in front of the dash is not. If #492 lands on Karath, the line survives
+   and the name in it changes.
+2. **ABSOLUTE RULE 12 still gates publication.** "Operating system for organizational cyber
+   risk" is a claim about behaviour, and #571's own criteria 3-4 require `product-verifier`
+   to clear it against the codebase before it reaches any public surface. That check is not
+   waived by this decision — it is what the decision now has to pass. #571 moves from
+   `status:blocked` to `status:needs-refinement`: its criterion 1 is satisfied, and the
+   remaining criteria describe real work.
+
+**Why "both" on the framing** — the two phrases do different jobs. A customer says
+"spreadsheets"; a spec has to name the chain — collect, copy, classify, correlate, score,
+ticket, evidence, report — that the automation roadmap actually attacks. Using the precise
+phrase outward would be jargon, and the plain one inward would understate the target.
+**Unblocked** — #571 (to refinement, not to implementation).
+
+### D-032 — a `tier:` label prefix is authorised, with exactly six values · 2026-09-07
+**Decided** — Authorise `tier:`. Matches the recommendation.
+
+**Consequence** — **This amends CLAUDE.md's "fixed, never invent one" label table**, which is
+why it needed the owner. The six values are fixed and there is no seventh:
+`tier:0-trust` · `tier:1-product-engine` · `tier:2-killer-workflow` · `tier:3-ecosystem` ·
+`tier:4-ux` · `tier:5-deferred`. A tier is orthogonal to `priority:`: priority says how
+urgent, tier says how strategic, and conflating the two is the confusion the founder's note
+of 2026-09-04 exists to end. Holding tiers in milestone names only would mean an issue's tier
+changed when it was *scheduled*, which inverts the concept.
+
+**Note on the premise** — the register said "#570 proceeds either way". **#570 is closed**;
+its PR merged. Backfilling `tier:` onto the existing backlog is therefore new work, not part
+of #570.
+**Unblocked** — tiers become filterable.
+
+### D-031 — the nine Tier 5 deferrals are confirmed · 2026-09-07
+**Decided** — Confirm all nine. Matches the recommendation.
+**Issues** — #509, #510, #511, #512, #513 (charts) · #397, #222 (Digital Twin), #205 (Attack
+Graph), #403 (blast radius).
+
+**Consequence** — nothing is closed. Every spec survives intact in `Backlog — deferred
+(Tier 5)` and returns the moment a Tier 1 or Tier 2 issue names it as a requirement, which is
+a stronger position than being built speculatively. Each move reverses in one command.
+
+**One finding that strengthens the deferral** — #511 (Candlestick / Profit-Loss) turns out to
+be unbuildable as specified, independently of having no consumer.
+`frontend/src/shared/ds/charts/CartesianChart.tsx:160` builds its y scale as
+`domain: [0, max === 0 ? 1 : max]` with no escape hatch, deliberately ("truncating a bar axis
+is a lie with a chart around it"). A Profit/Loss series would therefore render every loss
+clamped to the zero baseline — **silently wrong, not merely unsupported**. Before that issue
+can be ready, someone must decide when a chart in this layer may use a domain that excludes
+zero. Recorded on #511.
+**Unblocked** — nothing was blocked; the register entry closes.
+
+### D-030 — the OpenRisk Canonical Model and OSCAL are both adopted, model first · 2026-09-07
+**Decided** — Option A. Accept the canonical model **and** commit to OSCAL as the interchange
+format, in that order, with an ADR on #541 **before any code**. Matches the recommendation.
+
+**Rationale (owner)** — Without a canonical model we accumulate connectors until they are
+unmaintainable, and every automation ambition in the roadmap sits on current table shapes.
+OSCAL is the smaller commitment and a large credibility return with regulated and
+public-sector buyers, and it is coherent only *after* the model, because it then maps onto
+something stable.
+
+**Consequence — this is the largest architectural commitment in the project's history, and
+half of it is irreversible.** The ADR and the internal Go types are reversible. **Publishing
+`openrisk-schema.json` with a semver compatibility promise is not**: once external parties
+build against it, breaking it costs them, not us. The sequence therefore matters and is not
+an optimisation —
+1. **#541** — the ADR: 17 entities, the mandatory envelope (`source`, `source_id`,
+   `source_version`, `observed_at`, `confidence`, `provenance`, `relationships`), the fixed
+   relationship vocabulary, and an explicit out-of-scope list. **No code until it is accepted.**
+2. **#542** — publish the schema and its compatibility policy. This is the irreversible step.
+3. **#543** — the Data Contract, so a source is a declarative mapping rather than a connector.
+4. **#566** — OSCAL import/export with a proven round-trip, after 1-3.
+
+Per CLAUDE.md the ADR is required anyway for a change of this reach; what this decision adds
+is that it is required *first*, and that #542 must not land before #541 is accepted.
+**Unblocked** — #535 (epic) · #541 · #542 · #543 · #566, and behind them #536 (killer
+workflow A). All five remain `status:needs-refinement`: the architectural question is
+answered, the specs still need their criteria.
+
+### D-029 — the wave milestones are retired, and the `*-v1` family folds in with them · 2026-09-07
+**Decided** — Option C. One milestone family: the release trains. Both the eight `Wave`
+milestones and `trust-v1` / `gtm-v1` / `ds-v1` are retired into them, staged smallest first.
+
+**Rationale (owner)** — Matches the recommendation. Option A (retire the waves only) leaves a
+third family standing and re-raises this same question within a month.
+
+**Three corrections to the register entry, all verified 2026-09-07 —**
+1. **The waves hold 89 open issues, not 44.** The original count omitted `Wave 8 — Launch
+   polish`, which alone holds 47. Verified: Wave 8 (47) · Wave 1 (11) · Wave 4 (9) ·
+   Wave 7 (7) · Wave 5 (6) · Wave 2 (5) · Wave 3 (4) · Wave 6 (0).
+2. **There were three families, not two.** `trust-v1` (21) · `gtm-v1` (8) · `ds-v1` (2) hold
+   31 more, against 103 in the release trains.
+3. **#570 is closed.** It is not the vehicle for this work.
+
+**Consequence** — ~120 issues change milestone. That is a planning pass, not a mechanical
+one: each issue needs a release train chosen for it, which is `/plan-milestone` work.
+**Nothing is deleted** — a retired milestone is *closed*, so its history survives and nothing
+new can be filed into it. Staging, smallest first, so the sort is interruptible:
+Wave 6 (0) → Wave 3 (4) → Wave 2 (5) → Wave 5 (6) → Wave 7 (7) → Wave 4 (9) → Wave 1 (11) →
+`ds-v1` (2) → `gtm-v1` (8) → `trust-v1` (21) → Wave 8 (47).
+
+`trust-v1` is deliberately late: it is the security-hardening milestone that #529 and its
+siblings are landing into right now, and moving live work mid-flight is how issues get lost.
+**Unblocked** — `/plan-milestone` has one family to read. Redistribution is tracked as its own
+issue.
+
+### D-035 — `Idempotency-Key`: a PostgreSQL record, optional on every mutation endpoint · 2026-09-07
+**Decided** — Option A, with an ADR. Matches the recommendation.
+
+**Renumbered.** This was raised on 2026-09-03 as a second **D-028**, colliding with the
+anime.js decision of the same day. The anime.js number keeps it: it is cited in commit
+history (`ci: gate anime.js on staying lazy and within its ceiling (#445, D-028)`) and in
+`scripts/check-anime-budget.mjs`, so renumbering it would orphan those references. The
+idempotency question becomes **D-035**.
+
+**Rationale (owner)** — Redis is attractive until you write the sentence we would have to
+publish: *"retrying is safe unless the cache evicted your key"*, which is not a guarantee an
+integrator can build on. A durable record that commits in the same transaction as the write it
+protects is the only version that is true. Optional rather than required, because requiring the
+header is a breaking change for every existing client for a benefit only retrying clients
+need — honour it when present, and document it.
+
+**Consequence** — #517 gains a table and a migration, and an ADR, because this touches every
+mutation endpoint and the reasoning should outlive the issue. The three remaining design
+questions — key scope (key alone, or key + tenant + body hash), concurrency semantics, and
+retention — are `tech-lead`'s to settle now that storage and reach are fixed. #517 stays
+`status:needs-refinement` until they are.
+
+**Scope reminder** — #335 already removed the duplicates users actually report. What this
+covers is only the retry after a response that never arrived.
+**Unblocked** — #517 may be refined. The forcing function is Wave 8 planning, and Wave 8 is
+the largest milestone at 47 open issues.
 
 ### D-028 — anime.js is admitted as a second animation runtime, for SVG entry draw only · 2026-09-03
 **Decided** — Adopt anime.js as #445 specifies. It enters as a real dependency
