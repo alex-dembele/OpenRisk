@@ -93,8 +93,14 @@ labels `type:` / `area:` / `priority:`. Otherwise it carries
 | `area:` | backend · frontend · infra · design · marketing · docs · db |
 | `priority:` | P0-critical · P1-high · P2-medium · P3-low |
 | `status:` | needs-refinement · ready · in-progress · blocked · in-review |
+| `tier:` | 0-trust · 1-product-engine · 2-killer-workflow · 3-ecosystem · 4-ux · 5-deferred |
 
 `P0-critical` = production broken or exposed. Bypasses the milestone, worked now.
+
+`tier:` was added by D-032 on 2026-09-07 and is the only prefix ever added
+to this table. Six values, no seventh. It is orthogonal to `priority:`: priority says how
+urgent, tier says how strategic. An issue may be `priority:P1-high` and `tier:5-deferred`
+— urgent if we did it, and not what we are doing.
 
 ### Branch, commit, PR
 - Branch: `gh issue develop <n> --checkout` → `<type>/<n>-<slug>`
