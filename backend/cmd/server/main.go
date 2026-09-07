@@ -1040,6 +1040,12 @@ func main() {
 	api.Use(middleware.PATMiddleware(patService, resolveSession))
 	protected := api.Use(middleware.Protected(rsaKeys, jtiBlacklistChecker))
 
+	// Response-cache invalidation (#337). Mounted here, right after the gate that
+	// resolves the tenant, so every authenticated write drops that tenant's
+	// cached responses. One place rather than a hook in each handler: the next
+	// handler somebody adds cannot forget it. No-op without Redis.
+	protected.Use(handlers.InvalidateCacheOnMutation(cacheableHandlers.Decoration()))
+
 	// Per-tenant quota (audit finding F-03), mounted immediately after the auth
 	// gate because that is what populates the tenant local. Without this a single
 	// tenant — runaway integration or compromised token — can exhaust shared DB
