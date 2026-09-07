@@ -585,7 +585,10 @@ function HeatmapCard({
 // band split uses each risk's CURRENT criticality — the register does not version
 // criticality per day, and inventing a per-day band would be a number nobody
 // could reconcile.
-function TrendCard({
+// Exported for its tests. The decision this component makes — "no risks" versus
+// "no risks in THIS window" — was wrong once (#343) and the two states have
+// opposite remedies, so it is pinned by tests rather than left to inspection.
+export function TrendCard({
   trend,
   registerTotal,
   isLoading,

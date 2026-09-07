@@ -108,6 +108,7 @@ func TestIntegration(c *fiber.Ctx) error {
 		response.Message = "Integration test successful"
 		// Log audit
 		_ = auditService.LogAction(&domain.AuditLog{
+			TenantID:  auditTenant(c),
 			UserID:    &claims.Sub,
 			Action:    domain.ActionIntegrationTest,
 			Resource:  domain.ResourceIntegration,
@@ -120,6 +121,7 @@ func TestIntegration(c *fiber.Ctx) error {
 		response.Details = string(body)
 		// Log audit failure
 		_ = auditService.LogAction(&domain.AuditLog{
+			TenantID:  auditTenant(c),
 			UserID:    &claims.Sub,
 			Action:    domain.ActionIntegrationTest,
 			Resource:  domain.ResourceIntegration,

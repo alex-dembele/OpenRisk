@@ -96,6 +96,12 @@ func newStreamTestEnv(t *testing.T, opts apprealtime.HubOptions) *streamTestEnv 
 			perms = strings.Split(raw, ",")
 		}
 		c.Locals("user", &authpkg.Claims{Permissions: perms})
+		// The session id the revocation check reads on each keepalive (#345).
+		// Absent unless a test asks for one, so every pre-existing test keeps
+		// the behaviour it was written against: no jti means nothing to revoke.
+		if jti := c.Get("X-Test-JTI"); jti != "" {
+			c.Locals("jti", jti)
+		}
 		return c.Next()
 	})
 	app.Get("/api/v1/realtime/events", h.Stream)

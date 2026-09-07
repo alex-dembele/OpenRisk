@@ -18,6 +18,16 @@ import (
 type MitigationRepository interface {
 	// CRUD operations
 	Create(ctx string, mitigation *domain.Mitigation) error
+
+	// CreateWithSubActions inserts a plan and its whole checklist in ONE
+	// transaction: either every row lands or none does. The plan insert and the
+	// sub-action inserts are a multi-table write, so splitting them across two
+	// repository calls leaves a committed plan with a truncated checklist when
+	// the second insert fails (see #335).
+	//
+	// The transaction lives here, in the repository, because the application
+	// layer may not import GORM and so cannot hold a transaction handle.
+	CreateWithSubActions(ctx string, mitigation *domain.Mitigation, subActions []*domain.MitigationSubAction) error
 	GetByID(ctx string, id uuid.UUID) (*domain.Mitigation, error)
 	GetByIDWithSubActions(ctx string, id uuid.UUID) (*domain.Mitigation, error)
 	List(ctx string, filters map[string]interface{}) ([]domain.Mitigation, error)
@@ -86,6 +96,8 @@ func (r *GormMitigationRepository) GetByIDWithSubActions(tenantID string, id uui
 
 	result := r.db.Where("tenant_id = ? AND id = ? AND deleted_at IS NULL", tenantUUID, id).
 		Preload("SubActions", func(db *gorm.DB) *gorm.DB {
+			// mitigation_subactions has no tenant_id column: it is gated through
+			// its parent, which the Where above already pinned to this tenant.
 			return db.Where("deleted_at IS NULL").Order("\"order\", created_at")
 		}).
 		Preload("Risk").
@@ -114,17 +126,21 @@ func (r *GormMitigationRepository) List(tenantID string, filters map[string]inte
 
 	// Apply filters
 	if status, ok := filters["status"]; ok {
+		// Chained onto query, which filters by tenant_id above.
 		query = query.Where("status = ?", status)
 	}
 	if priority, ok := filters["priority"]; ok {
+		// Chained onto query, which filters by tenant_id above.
 		query = query.Where("priority = ?", priority)
 	}
 	if riskID, ok := filters["risk_id"]; ok {
+		// Chained onto query, which filters by tenant_id above.
 		query = query.Where("risk_id = ?", riskID)
 	}
 	// "Mes mitigations": any of the three accountability slots. The legacy jsonb
 	// array is OR'd in so rows assigned before migration 0044 still answer.
 	if user, ok := filters["involved_user"]; ok {
+		// Chained onto query, which filters by tenant_id above.
 		query = query.Where(
 			"(owner_id = ? OR assignee_id = ? OR reviewer_id = ? OR assigned_to @> ?)",
 			user, user, user, fmt.Sprintf(`["%v"]`, user),

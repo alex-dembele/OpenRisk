@@ -8,6 +8,24 @@ Git tags use the `vMAJOR.MINOR.PATCH[-rc.N]` convention; see [docs/VERSIONING.md
 
 ## [Unreleased]
 
+### Deprecated
+- Three legacy SSE endpoints now carry RFC 8594 `Deprecation`, `Sunset` and `Link` headers and are
+  **removed in 1.2.0** (sunset **2026-12-02**) — see
+  [docs/API_REFERENCE.md](docs/API_REFERENCE.md#deprecated-endpoints) and #527:
+  - `GET /mitigations/events` → `GET /realtime/events?aggregates=mitigation`. This one matters:
+    it accepts the access token as a **query parameter**, so the credential reaches access logs,
+    proxy logs and browser history. The replacement uses the HttpOnly session cookie.
+  - `GET /scanner/events` → `GET /scanner/jobs` (**polling**; the realtime hub has no `scan.*`
+    events).
+  - `GET /reports/{reportId}/progress` → `GET /reports/{reportId}` (**polling**; no `report.*`
+    events).
+
+  `GET /scanner/agent/stream` — the Agent's own job channel — is **not** deprecated.
+
+### Removed
+- `frontend/src/hooks/useSSE.ts`, a generic SSE hook with no consumers, superseded by
+  `src/lib/realtime.ts`.
+
 ### Planned
 - Board Report mensuel (IA, human-in-the-loop, FCFA) — the second half of M4
 - Multi-tenant support

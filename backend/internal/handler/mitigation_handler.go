@@ -120,13 +120,20 @@ func CreateMitigation(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Retrieve and return created plan
-	createdPlan, err := repo.GetByIDWithSubActions(ctx.OrganizationID.String(), output.ID)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve created plan"})
+	// The write has committed. From here on the request has succeeded and the
+	// client must be told so — returning a 5xx now would report a failure for a
+	// plan that exists, and the user's natural response is to create a second
+	// one (#335).
+	//
+	// The read-back is still attempted, because it returns the row with its
+	// relations resolved, which is a richer answer than the entity we just
+	// wrote. But it is now an enrichment, not a gate: if it fails we answer
+	// from what the use case committed.
+	if createdPlan, err := repo.GetByIDWithSubActions(ctx.OrganizationID.String(), output.ID); err == nil {
+		return c.Status(201).JSON(createdPlan)
 	}
 
-	return c.Status(201).JSON(createdPlan)
+	return c.Status(201).JSON(output.Plan)
 }
 
 // GetMitigation retrieves a mitigation plan by ID

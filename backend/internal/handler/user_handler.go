@@ -60,6 +60,19 @@ type UserResponseDTO struct {
 // Create a global audit service instance for user handlers
 var auditService = service.NewAuditService()
 
+// auditTenant is the organisation an audited action was performed IN, taken from
+// the signed session and never from the request body or path (#532).
+//
+// It returns nil rather than the zero UUID when no organisation resolves, so an
+// unattributable event is recorded as unattributed — invisible to every tenant —
+// instead of being stamped with an id no organisation has.
+func auditTenant(c *fiber.Ctx) *uuid.UUID {
+	if id := safeGetUUID(c, "tenant_id"); id != uuid.Nil {
+		return &id
+	}
+	return nil
+}
+
 // GetMe : Récupère les infos de l'utilisateur connecté
 func GetMe(c *fiber.Ctx) error {
 	claims := middleware.GetUserClaims(c)
@@ -275,6 +288,7 @@ func UpdateUserStatus(c *fiber.Ctx) error {
 	}
 
 	_ = auditService.LogAction(&domain.AuditLog{
+		TenantID:   auditTenant(c),
 		UserID:     &claims.Sub,
 		Action:     action,
 		Resource:   domain.ResourceUser,
@@ -339,7 +353,7 @@ func UpdateUserRole(c *fiber.Ctx) error {
 	}
 
 	// Log the role change
-	_ = auditService.LogRoleChange(claims.Sub, targetUser.ID, oldRole, input.Role, ipAddress, userAgent)
+	_ = auditService.LogRoleChange(auditTenant(c), claims.Sub, targetUser.ID, oldRole, input.Role, ipAddress, userAgent)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "User role updated"})
 }
@@ -387,7 +401,7 @@ func DeleteUser(c *fiber.Ctx) error {
 	}
 
 	// Log the user deletion
-	_ = auditService.LogUserDelete(claims.Sub, targetUser.ID, ipAddress, userAgent)
+	_ = auditService.LogUserDelete(auditTenant(c), claims.Sub, targetUser.ID, ipAddress, userAgent)
 
 	return c.Status(fiber.StatusNoContent).Send([]byte{})
 }
@@ -474,6 +488,7 @@ func CreateUser(c *fiber.Ctx) error {
 
 	// Log the action
 	_ = auditService.LogAction(&domain.AuditLog{
+		TenantID:   auditTenant(c),
 		UserID:     &claims.Sub,
 		Action:     domain.ActionUserCreate,
 		Resource:   domain.ResourceUser,

@@ -78,6 +78,11 @@ const (
 	sseHello     = "stream.hello"
 	sseHeartbeat = "stream.heartbeat"
 	sseResync    = "stream.resync"
+	// sseRevoked is terminal, and deliberately not a resync: a resync tells the
+	// client to reconnect with its cursor, which is precisely what a revoked
+	// session must not be invited to do. The client is being told to
+	// authenticate again, not to come back where it left off (#345).
+	sseRevoked = "stream.revoked"
 )
 
 // RealtimeEventReader is the replay side of the durable log.
@@ -231,6 +236,9 @@ func (h *RealtimeHandler) Stream(c *fiber.Ctx) error {
 
 	connID := sub.ID
 	userID := userID(c)
+	// Read off the request while it still exists: the body writer below runs
+	// after this handler returns, and the Fiber context is recycled by then.
+	jti := streamJTI(c)
 	log.Printf("realtime: stream open conn=%s tenant=%s user=%s filter=%s cursor=%d",
 		connID, tenant, userID, filter.Describe(), cursor)
 
@@ -267,6 +275,11 @@ func (h *RealtimeHandler) Stream(c *fiber.Ctx) error {
 			"filter":             filter.Describe(),
 			"allowed_aggregates": allowed,
 			"server_time":        time.Now().UTC().Format(time.RFC3339),
+			// The documented bound from #345: a revoked session stops receiving
+			// events within this many seconds. Stated rather than implied, so a
+			// client — or an auditor — reads the guarantee instead of inferring
+			// it from the keepalive.
+			"revocation_check_seconds": int(sseRevocationInterval.Seconds()),
 		}) {
 			return
 		}
@@ -322,6 +335,23 @@ func (h *RealtimeHandler) Stream(c *fiber.Ctx) error {
 				monitoring.RealtimeDeliveryLagSeconds.Observe(time.Since(env.OccurredAt).Seconds())
 
 			case <-keepalive.C:
+				// Re-authorize before writing anything else. This tick is the
+				// only regular event on an otherwise idle stream, so it is what
+				// bounds how long a revoked session keeps receiving data — one
+				// keepalive interval, and no longer (#345).
+				//
+				// Checked BEFORE the keepalive write, so a revoked session is
+				// never told the stream is healthy.
+				if sseSessionRevoked(jti) {
+					monitoring.RealtimeResyncsTotal.WithLabelValues("session_revoked").Inc()
+					log.Printf("realtime: stream revoked conn=%s tenant=%s user=%s", connID, tenant, userID)
+					st.control(sseRevoked, fiber.Map{
+						"reason": "session_revoked",
+						"detail": "this session was revoked; authenticate again before reconnecting",
+					})
+					return
+				}
+
 				// Two forms on purpose: the comment keeps intermediaries from
 				// timing the connection out, and the named event is what lets
 				// the CLIENT arm a watchdog — EventSource never surfaces

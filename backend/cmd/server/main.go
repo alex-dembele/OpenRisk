@@ -10,7 +10,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -470,6 +469,13 @@ func main() {
 	// Closure used by middleware.Protected(rsaKeys, jtiBlacklistChecker) to check the JTI blacklist on every request
 	jtiBlacklistChecker := tokenBlacklistManager.CheckJTIBlacklist(context.Background())
 
+	// The SAME closure re-checks live SSE streams on their keepalive tick, so a
+	// revoked session stops receiving events within one interval instead of
+	// holding a connection open for the stream's whole lifetime — up to two
+	// hours on /realtime/events (#345). One predicate for both: a stream and a
+	// request must never disagree about whether a session is revoked.
+	handlers.SetSSERevocationChecker(jtiBlacklistChecker)
+
 	// Initialize Score Engine (pure, stateless)
 	scoreEngine := scoring.NewEngine()
 	log.Println("Scoring: Engine initialized (pure, zero dependencies)")
@@ -702,46 +708,14 @@ func main() {
 	// every token is signed and validated by one implementation.
 	tokenManager := coreauth.NewTokenManager(database.DB, rsaKeys)
 
-	// resolveSessionForOrg re-derives a user's claims for a SPECIFIC organization,
-	// enforcing that the user is an ACTIVE member of it. It is the single
-	// authorization gate for org-scoped sessions: refresh resolves for the
-	// session's own org, and organization switching resolves for the chosen org.
-	// A user who is not an active member of orgID gets an error here, so a forged
-	// or stolen org id can never be turned into a session.
+	// Both resolvers live in session_wiring.go as named functions so they can be
+	// driven in a test without a database. They enforce ACCOUNT state as well as
+	// membership state; see the commentary there for why both are needed (#350).
 	resolveSessionForOrg := func(ctx context.Context, uid, orgID uuid.UUID) (*coreauth.SessionClaims, error) {
-		if orgID == uuid.Nil {
-			return nil, fmt.Errorf("organization is required")
-		}
-		member, err := userRepo.GetOrganizationMember(ctx, uid, orgID)
-		if err != nil {
-			return nil, err
-		}
-		if member == nil {
-			return nil, fmt.Errorf("user is not a member of this organization")
-		}
-		if !member.IsActive {
-			return nil, fmt.Errorf("membership is not active")
-		}
-		sc := &coreauth.SessionClaims{TenantID: orgID, OrgRoles: map[uuid.UUID]string{orgID: string(member.Role)}}
-		// EffectivePermissions unifies the admin wildcard, the business-role preset,
-		// and any legacy profile rules — so a business-role user keeps its
-		// permissions across a token refresh (same path as login).
-		sc.Permissions = member.EffectivePermissions()
-		return sc, nil
+		return resolveSessionClaimsForOrg(ctx, userRepo, uid, orgID)
 	}
-
-	// resolveSession re-derives a user's claims for their DEFAULT organization.
-	// Shared by IssueSession (OAuth2/SAML/MFA) and the PAT middleware, which have
-	// no notion of a chosen org.
 	resolveSession := func(ctx context.Context, uid uuid.UUID) (*coreauth.SessionClaims, error) {
-		org, err := userRepo.GetUserDefaultOrganization(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		if org == nil {
-			return nil, fmt.Errorf("user has no organization")
-		}
-		return resolveSessionForOrg(ctx, uid, org.ID)
+		return resolveSessionClaims(ctx, userRepo, uid)
 	}
 	tokenManager.SetSessionResolver(resolveSession)
 	tokenManager.SetOrgSessionResolver(resolveSessionForOrg)
@@ -896,7 +870,13 @@ func main() {
 		logoutUseCase,
 		passwordHasher,
 		authAudit,
-	).WithNewDeviceNotifier(newDeviceNotifier).WithUserLookup(userRepo).WithMFAStatus(mfaStatusResolver)
+	).WithNewDeviceNotifier(newDeviceNotifier).
+		WithUserLookup(userRepo).
+		WithMFAStatus(mfaStatusResolver).
+		// The same repository resolveSessionForOrg reads at token mint time, so
+		// /auth/me's business role and the token's permissions come from one
+		// membership row and cannot disagree (#338).
+		WithMemberLookup(userRepo)
 
 	// OAuth identity resolution: known link → verified-email link → provision.
 	// No provisioner is wired, so an identity with no OpenRisk account is refused
@@ -1059,6 +1039,12 @@ func main() {
 	// JWT middleware skips when a PAT already authenticated the request.
 	api.Use(middleware.PATMiddleware(patService, resolveSession))
 	protected := api.Use(middleware.Protected(rsaKeys, jtiBlacklistChecker))
+
+	// Response-cache invalidation (#337). Mounted here, right after the gate that
+	// resolves the tenant, so every authenticated write drops that tenant's
+	// cached responses. One place rather than a hook in each handler: the next
+	// handler somebody adds cannot forget it. No-op without Redis.
+	protected.Use(handlers.InvalidateCacheOnMutation(cacheableHandlers.Decoration()))
 
 	// Per-tenant quota (audit finding F-03), mounted immediately after the auth
 	// gate because that is what populates the tenant local. Without this a single

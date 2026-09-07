@@ -49,9 +49,22 @@ func (h *AuditLogHandler) GetAuditLogs(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Check if user is admin
+	// Who may call. This asks whether the caller administers their OWN
+	// organisation, which every customer's administrator does — so it gates the
+	// caller, never the rows. WHOSE rows come back is decided by the tenant
+	// predicate below, and the two must not be confused again (#532).
 	if !claims.HasPermission("*") && claims.OrgRoles[claims.TenantID] != "admin" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only admins can view audit logs"})
+	}
+
+	// The organisation comes from the signed token and from nowhere else, so no
+	// part of the request can widen the answer. Fail closed: a session with no
+	// organisation reads nothing rather than everything.
+	tenantID := claims.TenantID
+	if tenantID == uuid.Nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "a session scoped to an organization is required",
+		})
 	}
 
 	// Parse pagination
@@ -75,7 +88,7 @@ func (h *AuditLogHandler) GetAuditLogs(c *fiber.Ctx) error {
 	endTime := time.Now()
 	startTime := endTime.AddDate(0, 0, -30)
 
-	logs, err := h.auditService.GetAuditLogsByDateRange(startTime, endTime, limit, offset)
+	logs, err := h.auditService.GetAuditLogsByDateRange(tenantID, startTime, endTime, limit, offset)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve audit logs"})
 	}
@@ -126,9 +139,22 @@ func (h *AuditLogHandler) GetUserAuditLogs(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Check if user is admin
+	// Who may call. This asks whether the caller administers their OWN
+	// organisation, which every customer's administrator does — so it gates the
+	// caller, never the rows. WHOSE rows come back is decided by the tenant
+	// predicate below, and the two must not be confused again (#532).
 	if !claims.HasPermission("*") && claims.OrgRoles[claims.TenantID] != "admin" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only admins can view audit logs"})
+	}
+
+	// The organisation comes from the signed token and from nowhere else, so no
+	// part of the request can widen the answer. Fail closed: a session with no
+	// organisation reads nothing rather than everything.
+	tenantID := claims.TenantID
+	if tenantID == uuid.Nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "a session scoped to an organization is required",
+		})
 	}
 
 	userID := c.Params("user_id")
@@ -150,7 +176,7 @@ func (h *AuditLogHandler) GetUserAuditLogs(c *fiber.Ctx) error {
 
 	offset := (page - 1) * limit
 
-	logs, err := h.auditService.GetAuditLogsByUser(parseUUID(userID), limit, offset)
+	logs, err := h.auditService.GetAuditLogsByUser(tenantID, parseUUID(userID), limit, offset)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve audit logs"})
 	}
@@ -201,9 +227,22 @@ func (h *AuditLogHandler) GetAuditLogsByAction(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Check if user is admin
+	// Who may call. This asks whether the caller administers their OWN
+	// organisation, which every customer's administrator does — so it gates the
+	// caller, never the rows. WHOSE rows come back is decided by the tenant
+	// predicate below, and the two must not be confused again (#532).
 	if !claims.HasPermission("*") && claims.OrgRoles[claims.TenantID] != "admin" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only admins can view audit logs"})
+	}
+
+	// The organisation comes from the signed token and from nowhere else, so no
+	// part of the request can widen the answer. Fail closed: a session with no
+	// organisation reads nothing rather than everything.
+	tenantID := claims.TenantID
+	if tenantID == uuid.Nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "a session scoped to an organization is required",
+		})
 	}
 
 	action := c.Params("action")
@@ -225,7 +264,7 @@ func (h *AuditLogHandler) GetAuditLogsByAction(c *fiber.Ctx) error {
 
 	offset := (page - 1) * limit
 
-	logs, err := h.auditService.GetAuditLogsByAction(domain.AuditLogAction(action), limit, offset)
+	logs, err := h.auditService.GetAuditLogsByAction(tenantID, domain.AuditLogAction(action), limit, offset)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve audit logs"})
 	}

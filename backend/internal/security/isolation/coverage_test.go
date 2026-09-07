@@ -291,3 +291,97 @@ func TestIsolationGate_LegacyRecentTimelineIsRetired(t *testing.T) {
 		}
 	}
 }
+
+// genericEvidence is the string #412 stamped on every collection route when it
+// made them visible: a placeholder meaning "nobody has looked at this yet".
+//
+// #421 is the looking. This constant exists so the placeholder cannot come back
+// — not for the 97 routes it was written for, and not for the next module that
+// arrives in a hurry.
+const genericEvidence = "not assessed — collection route made visible by #412 criterion 9"
+
+// TestNoRouteCarriesTheGenericEvidenceString is #421 criterion 1.
+//
+// The registry's own rule is that a decision without a reason is
+// indistinguishable from a guess. TestEveryDecisionCarriesEvidence enforces that
+// SOME reason is present; this enforces that the reason is about this route.
+// A shared placeholder passes the first test and fails the purpose of both.
+//
+// Pending is still a legitimate status. What it may not be is anonymous: a
+// pending entry has to say what is unresolved and what would settle it, so the
+// next person can act on it without re-deriving the audit.
+func TestNoRouteCarriesTheGenericEvidenceString(t *testing.T) {
+	for _, d := range Decisions() {
+		if strings.Contains(d.Evidence, genericEvidence) {
+			t.Errorf("%s still carries the generic #412 placeholder. State what is "+
+				"specifically unresolved about THIS route and what would settle it.",
+				d.Pattern)
+		}
+	}
+}
+
+// TestCollectionGapsAreVisible is the counterpart to TestPendingGapsAreVisible,
+// for the surface that gate covers. Like it, it reports rather than fails:
+// turning acknowledged debt into a red build invites relabelling gaps as covered
+// to get green, which is the one outcome this registry exists to prevent.
+//
+// The count it logs is the honest residual — #421 criterion 6. Read it as the
+// number of collection routes whose isolation is reasoned about but not pinned
+// by a test, not as a number of known leaks.
+func TestCollectionGapsAreVisible(t *testing.T) {
+	counts := map[Status]int{}
+	var pending []string
+
+	all := collectionRoutes(t)
+	for _, r := range all {
+		d, ok := Lookup(r.Path)
+		if !ok {
+			continue // already reported by the collection gate
+		}
+		counts[d.Status]++
+		if d.Status == Pending {
+			pending = append(pending, r.String())
+		}
+	}
+
+	sort.Strings(pending)
+	t.Logf("isolation decisions across %d collection routes:", len(all))
+	for _, s := range []Status{Covered, Pending, PublicByDesign, MachineAuthenticated, SelfScoped, Unreachable} {
+		t.Logf("  %-22s %d", s, counts[s])
+	}
+	if len(pending) > 0 {
+		t.Logf("\n%d collection routes remain Pending — each states its own specific "+
+			"remainder in registry.go:", len(pending))
+		for _, p := range pending {
+			t.Logf("  %s", p)
+		}
+	}
+}
+
+// TestLookup_ExactPatternBeatsAWildcardOverTheSamePath pins the tie-break.
+//
+// A wildcard matches its own bare prefix, and it is the longer string, so the
+// original length-only comparison gave GET /api/v1/risks to /api/v1/risks/* and
+// discarded the exact entry written for it. The route was assessed, carried its
+// own decision, and still reported as unassessed — the failure mode this whole
+// registry exists to make impossible.
+//
+// This is asserted on the live registry rather than on a fixture, because the
+// value of the rule is that it holds for the entries actually recorded.
+func TestLookup_ExactPatternBeatsAWildcardOverTheSamePath(t *testing.T) {
+	for _, d := range Decisions() {
+		if strings.HasSuffix(d.Pattern, "/*") {
+			continue
+		}
+		got, ok := Lookup(d.Pattern)
+		if !ok {
+			t.Errorf("%s matches no decision, including its own", d.Pattern)
+			continue
+		}
+		if got.Pattern != d.Pattern {
+			t.Errorf("Lookup(%q) resolved to %q — a module-wide pattern is answering "+
+				"for a route that carries its own entry, so that entry is dead text",
+				d.Pattern, got.Pattern)
+		}
+	}
+}

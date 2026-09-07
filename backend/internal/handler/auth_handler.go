@@ -90,21 +90,23 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	// Find user by email with role preload
 	if err := database.DB.Preload("Role").Where("email = ?", input.Email).First(&user).Error; err != nil {
 		// Log failed login attempt
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "User not found")
+		// No user resolved, so there is no organisation to attribute this to. The
+		// row is recorded unattributed rather than guessed at.
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "User not found")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
 	// Verify password using Argon2id
 	if !h.passwordHasher.Verify(user.Password, input.Password) {
 		// Log failed login attempt
-		_ = h.auditService.LogLogin(user.ID, domain.ResultFailure, ipAddress, userAgent, "Invalid password")
+		_ = h.auditService.LogLogin(auditOrgOf(&user), user.ID, domain.ResultFailure, ipAddress, userAgent, "Invalid password")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
 	// Check if user is active
 	if !user.IsActive {
 		// Log failed login attempt for inactive user
-		_ = h.auditService.LogLogin(user.ID, domain.ResultFailure, ipAddress, userAgent, "User account is inactive")
+		_ = h.auditService.LogLogin(auditOrgOf(&user), user.ID, domain.ResultFailure, ipAddress, userAgent, "User account is inactive")
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "User account is inactive"})
 	}
 
@@ -112,7 +114,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	token, err := h.authService.GenerateToken(&user)
 	if err != nil {
 		// Log failed login attempt
-		_ = h.auditService.LogLogin(user.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to generate token")
+		_ = h.auditService.LogLogin(auditOrgOf(&user), user.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to generate token")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
 
@@ -120,7 +122,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	_ = h.authService.UpdateLastLogin(user.ID)
 
 	// Log successful login
-	_ = h.auditService.LogLogin(user.ID, domain.ResultSuccess, ipAddress, userAgent, "")
+	_ = h.auditService.LogLogin(auditOrgOf(&user), user.ID, domain.ResultSuccess, ipAddress, userAgent, "")
 
 	return c.Status(fiber.StatusOK).JSON(AuthResponse{
 		Token: token,
@@ -143,32 +145,32 @@ func (h *AuthHandler) RefreshToken(c *fiber.Ctx) error {
 	// Get user claims from context (set by auth middleware)
 	claims := middleware.GetUserClaims(c)
 	if claims == nil {
-		_ = h.auditService.LogTokenRefresh(uuid.Nil, domain.ResultFailure, ipAddress, userAgent, "Unauthorized")
+		_ = h.auditService.LogTokenRefresh(nil, uuid.Nil, domain.ResultFailure, ipAddress, userAgent, "Unauthorized")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
 	// Fetch user from database
 	var user domain.User
 	if err := database.DB.Preload("Role").First(&user, "id = ?", claims.Sub).Error; err != nil {
-		_ = h.auditService.LogTokenRefresh(claims.Sub, domain.ResultFailure, ipAddress, userAgent, "User not found")
+		_ = h.auditService.LogTokenRefresh(nil, claims.Sub, domain.ResultFailure, ipAddress, userAgent, "User not found")
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
 	// Check if user is still active
 	if !user.IsActive {
-		_ = h.auditService.LogTokenRefresh(user.ID, domain.ResultFailure, ipAddress, userAgent, "User account is inactive")
+		_ = h.auditService.LogTokenRefresh(auditOrgOf(&user), user.ID, domain.ResultFailure, ipAddress, userAgent, "User account is inactive")
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "User account is inactive"})
 	}
 
 	// Generate new token
 	newToken, err := h.authService.GenerateToken(&user)
 	if err != nil {
-		_ = h.auditService.LogTokenRefresh(user.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to generate token")
+		_ = h.auditService.LogTokenRefresh(auditOrgOf(&user), user.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to generate token")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
 
 	// Log successful token refresh
-	_ = h.auditService.LogTokenRefresh(user.ID, domain.ResultSuccess, ipAddress, userAgent, "")
+	_ = h.auditService.LogTokenRefresh(auditOrgOf(&user), user.ID, domain.ResultSuccess, ipAddress, userAgent, "")
 
 	return c.Status(fiber.StatusOK).JSON(AuthResponse{
 		Token: newToken,
@@ -213,51 +215,51 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 
 	input := new(RegisterInput)
 	if err := c.BodyParser(input); err != nil {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Invalid input")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Invalid input")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
 	// Validate input
 	if input.Email == "" || input.Password == "" || input.Username == "" || input.FullName == "" {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Missing required fields")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Missing required fields")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All fields are required"})
 	}
 
 	// Shared policy (audit finding F-05) — see domain.ValidatePassword.
 	if err := domain.ValidatePassword(input.Password); err != nil {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Password does not meet policy")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Password does not meet policy")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if len(input.Username) < 3 {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Username too short")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Username too short")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Username must be at least 3 characters"})
 	}
 
 	// Check if email already exists
 	var existingUser domain.User
 	if err := database.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Email already in use")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Email already in use")
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already in use"})
 	}
 
 	// Check if username already exists
 	if err := database.DB.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Username already in use")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Username already in use")
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Username already in use"})
 	}
 
 	// Hash password using Argon2id (OWASP recommended)
 	hashedPassword, err := h.passwordHasher.Hash(input.Password)
 	if err != nil {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Failed to process password")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Failed to process password")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to process password"})
 	}
 
 	// Get viewer role (default role for new users)
 	var viewerRole domain.Role
 	if err := database.DB.Where("name = ?", "viewer").First(&viewerRole).Error; err != nil {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Default role not found")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Default role not found")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Default role not found"})
 	}
 
@@ -272,25 +274,25 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	}
 
 	if err := database.DB.Create(&newUser).Error; err != nil {
-		_ = h.auditService.LogRegister(nil, domain.ResultFailure, ipAddress, userAgent, "Failed to create user")
+		_ = h.auditService.LogRegister(nil, nil, domain.ResultFailure, ipAddress, userAgent, "Failed to create user")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}
 
 	// Reload with role
 	if err := database.DB.Preload("Role").First(&newUser, "id = ?", newUser.ID).Error; err != nil {
-		_ = h.auditService.LogRegister(&newUser.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to retrieve user")
+		_ = h.auditService.LogRegister(auditOrgOf(&newUser), &newUser.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to retrieve user")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve user"})
 	}
 
 	// Generate JWT token
 	token, err := h.authService.GenerateToken(&newUser)
 	if err != nil {
-		_ = h.auditService.LogRegister(&newUser.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to generate token")
+		_ = h.auditService.LogRegister(auditOrgOf(&newUser), &newUser.ID, domain.ResultFailure, ipAddress, userAgent, "Failed to generate token")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
 
 	// Log successful registration
-	_ = h.auditService.LogRegister(&newUser.ID, domain.ResultSuccess, ipAddress, userAgent, "")
+	_ = h.auditService.LogRegister(auditOrgOf(&newUser), &newUser.ID, domain.ResultSuccess, ipAddress, userAgent, "")
 
 	return c.Status(fiber.StatusCreated).JSON(AuthResponse{
 		Token: token,
@@ -303,4 +305,26 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		},
 		ExpiresIn: 24 * 60 * 60,
 	})
+}
+
+// auditOrgOf resolves the organisation an authentication event belongs to (#532).
+//
+// It reads users.default_org_id — an organizations.id, which is the id space the
+// `tenant_id` JWT claim carries and therefore the only one a later read can
+// match. It deliberately does NOT read users.tenant_id: that column points at
+// the separate `tenants` table (domain.Tenant, RBAC), and a row stamped with one
+// of those ids would be attributed to something no session is ever scoped to —
+// the event would vanish rather than leak, which is a quieter bug than the one
+// being fixed and no less wrong.
+//
+// nil means the event could not be attributed: no user, or a user with no
+// default organisation. A NULL tenant_id is invisible to every tenant, so
+// failing to resolve one loses the event from the UI rather than showing it to
+// everybody. That is the direction to fail in.
+func auditOrgOf(user *domain.User) *uuid.UUID {
+	if user == nil || user.DefaultOrgID == nil || *user.DefaultOrgID == uuid.Nil {
+		return nil
+	}
+	id := *user.DefaultOrgID
+	return &id
 }

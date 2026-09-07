@@ -171,3 +171,68 @@ func TestNotificationRepositoryPreferencesCreateAndUpdate(t *testing.T) {
 	require.Equal(t, 5, updated.EmailDeadlineAdvanceDays)
 	require.WithinDuration(t, time.Now(), updated.UpdatedAt, 2*time.Second)
 }
+
+// The two /notifications collection routes that the tests above did not reach
+// (#421). GET /notifications is covered by
+// TestNotificationRepositoryTenantIsolationReadAndDelete; the unread badge and
+// the preferences screen each run their own query, and a query that is not
+// asserted is not covered — the badge in particular is loaded on every page, so
+// a lost predicate there counts every tenant's unread notifications for
+// everyone.
+//
+// Both are keyed on (user_id, tenant_id): the same person legitimately belongs
+// to more than one organisation, so the user id alone is not the boundary. The
+// fixture therefore uses ONE user id in two tenants, which is the case a
+// user-only predicate would get wrong.
+func TestNotificationRepository_UnreadCountAndPreferences_AreTenantScoped(t *testing.T) {
+	repo := setupNotificationRepo(t)
+	userID := uuid.New()
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+
+	insert := func(tenant uuid.UUID, subject string) {
+		require.NoError(t, repo.db.Table("notifications").Create(map[string]interface{}{
+			"id":         uuid.New().String(),
+			"user_id":    userID.String(),
+			"tenant_id":  tenant.String(),
+			"channel":    string(domain.NotificationChannelInApp),
+			"status":     string(domain.NotificationStatusPending),
+			"subject":    subject,
+			"created_at": time.Now(),
+			"updated_at": time.Now(),
+		}).Error)
+	}
+	insert(tenantA, "a-1")
+	for _, s := range []string{"b-1", "b-2", "b-3"} {
+		insert(tenantB, s)
+	}
+
+	countA, err := repo.GetUnreadCount(userID, tenantA)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), countA,
+		"tenant B's three unread notifications must not inflate tenant A's badge")
+
+	countB, err := repo.GetUnreadCount(userID, tenantB)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), countB)
+
+	countNone, err := repo.GetUnreadCount(userID, uuid.New())
+	require.NoError(t, err)
+	require.Equal(t, int64(0), countNone,
+		"a tenant the user has no notifications in must read zero, not everything")
+
+	// Preferences are per (user, tenant): the same person may want email in one
+	// organisation and nothing in another, and reading the wrong row would both
+	// leak a setting and mis-deliver.
+	require.NoError(t, repo.UpdateNotificationPreferences(userID, tenantA, map[string]interface{}{
+		"slack_enabled": true,
+	}))
+	prefsB, err := repo.GetUserNotificationPreferences(userID, tenantB)
+	require.NoError(t, err)
+	require.False(t, prefsB.SlackEnabled,
+		"tenant A's preference was read back inside tenant B")
+
+	prefsA, err := repo.GetUserNotificationPreferences(userID, tenantA)
+	require.NoError(t, err)
+	require.True(t, prefsA.SlackEnabled)
+}

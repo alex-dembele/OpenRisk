@@ -44,6 +44,11 @@ func (h *MitigationEventsHandler) Stream(c *fiber.Ctx) error {
 	}
 	tenantID := claims.TenantID
 
+	// DEPRECATED (#347). Superseded by the shared realtime stream, which carries
+	// the session in an HttpOnly cookie instead of accepting the access token as
+	// a query parameter the way this endpoint does.
+	markSSEDeprecated(c, "/api/v1/realtime/events?aggregates=mitigation")
+
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("Connection", "keep-alive")
@@ -81,6 +86,15 @@ func (h *MitigationEventsHandler) Stream(c *fiber.Ctx) error {
 					return
 				}
 			case <-keepalive.C:
+				// Re-authorize on the tick: the token was validated once, when
+				// the stream opened, and this connection can outlive its
+				// revocation by hours otherwise (#345). h.blacklist is the same
+				// predicate ValidateAccessToken used above.
+				if sseRevokedWith(h.blacklist, claims.JTI) {
+					fmt.Fprint(w, "event: stream.revoked\ndata: {\"reason\":\"session_revoked\"}\n\n")
+					_ = w.Flush()
+					return
+				}
 				fmt.Fprint(w, ": keepalive\n\n")
 				if err := w.Flush(); err != nil {
 					return

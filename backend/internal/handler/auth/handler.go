@@ -35,11 +35,27 @@ type Handler struct {
 	// rather than guessing, and the client treats an absent block as "unknown"
 	// instead of as "not required".
 	mfaStatus *auth.MFAStatusResolver
+	// memberLookup resolves the caller's membership so /auth/me can report the
+	// CURRENT business role. Optional; without it the field is omitted rather
+	// than guessed (#338).
+	memberLookup OrganizationMemberReader
 }
 
 // UserByIDReader resolves a user by id for /auth/me.
 type UserByIDReader interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+}
+
+// OrganizationMemberReader resolves the caller's membership in the active
+// organization.
+//
+// business_role lives on the MEMBERSHIP, not on the user: the same account can
+// be an RSSI in one organization and a viewer in another, so there is no such
+// field on domain.User to serialise. /auth/me is where every authenticated path
+// — password login, MFA, session restore — reads its profile back, which makes
+// it the one place worth resolving it (#338).
+type OrganizationMemberReader interface {
+	GetOrganizationMember(ctx context.Context, userID, orgID uuid.UUID) (*domain.OrganizationMember, error)
 }
 
 // WithNewDeviceNotifier enables the new-device sign-in alert.
@@ -57,6 +73,12 @@ func (h *Handler) WithUserLookup(r UserByIDReader) *Handler {
 // WithMFAStatus makes /auth/me carry the resolved MFA requirement (OR26-03).
 func (h *Handler) WithMFAStatus(r *auth.MFAStatusResolver) *Handler {
 	h.mfaStatus = r
+	return h
+}
+
+// WithMemberLookup makes /auth/me report the caller's current business role.
+func (h *Handler) WithMemberLookup(r OrganizationMemberReader) *Handler {
+	h.memberLookup = r
 	return h
 }
 
@@ -506,6 +528,15 @@ func (h *Handler) Me(c *fiber.Ctx) error {
 			if mfaBlock != nil {
 				body["mfa"] = mfaBlock
 			}
+			// The CURRENT business role, re-read per call like everything else
+			// here. The client picks its persona and its landing route from
+			// this; before #338 the field did not exist on this response, so
+			// every path that restores a profile through /auth/me — MFA login
+			// above all — resolved it to "" and dropped the user on the default
+			// dashboard while their permissions said otherwise.
+			if role, ok := h.resolveBusinessRole(c, mwCtx.UserID, mwCtx.OrganizationID); ok {
+				body["business_role"] = role
+			}
 			return c.JSON(body)
 		}
 		if err == nil && user == nil {
@@ -524,6 +555,31 @@ func (h *Handler) Me(c *fiber.Ctx) error {
 		body["mfa"] = mfaBlock
 	}
 	return c.JSON(body)
+}
+
+// resolveBusinessRole reads the caller's CURRENT business role for the active
+// organization. The bool reports whether it could be resolved at all.
+//
+// Omitted rather than defaulted when it cannot be, for the same reason as the
+// MFA block below: "" is a REAL value — root and admin carry no job-role preset
+// — so returning it on a database error would assert "this user is an admin"
+// when the truthful answer is "not known". An absent key leaves the client on
+// what it already had; a present "" is an answer.
+func (h *Handler) resolveBusinessRole(c *fiber.Ctx, userID, orgID uuid.UUID) (domain.BusinessRoleKey, bool) {
+	if h.memberLookup == nil || orgID == uuid.Nil {
+		return "", false
+	}
+	member, err := h.memberLookup.GetOrganizationMember(c.UserContext(), userID, orgID)
+	if err != nil || member == nil {
+		return "", false
+	}
+	// A revoked membership is not a persona. Enforcement lives at token mint and
+	// in the request guard; reporting a role here for a membership that no longer
+	// authorizes anything would only mislead the navigation.
+	if !member.IsActive {
+		return "", false
+	}
+	return member.BusinessRole, true
 }
 
 // resolveMFABlock resolves the caller's MFA requirement, or nil when it cannot

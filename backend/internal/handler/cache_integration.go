@@ -60,6 +60,17 @@ func NewCacheableHandlers(cacheInstance *cache.Cache) *CacheableHandlers {
 	}
 }
 
+// Decoration exposes the underlying cache decoration so main.go can mount the
+// invalidation middleware with the same instance the wrappers use. Nil-safe: a
+// deployment without Redis gets a nil decoration, and every method on it is a
+// no-op.
+func (ch *CacheableHandlers) Decoration() *cache.CacheDecoration {
+	if ch == nil {
+		return nil
+	}
+	return ch.decoration
+}
+
 // SetCacheConfig updates cache TTL configuration
 func (ch *CacheableHandlers) SetCacheConfig(cfg CacheConfig) {
 	if ch == nil {

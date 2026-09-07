@@ -24,18 +24,22 @@ type ActivationRecorder interface {
 // CreateMitigationPlanUseCase creates a new mitigation plan with optional subactions
 type CreateMitigationPlanUseCase struct {
 	mitigationRepo repository.MitigationRepository
-	subactionRepo  repository.MitigationSubActionRepository
 	activation     ActivationRecorder
 	ownership      OwnershipManager
 }
 
+// NewCreateMitigationPlanUseCase builds the use case.
+//
+// subactionRepo is no longer used: sub-actions are written inside the plan
+// repository's transaction rather than through a second repository (#335). The
+// parameter is kept so the existing callers compile unchanged; a P0 fix is the
+// wrong moment to churn a constructor signature.
 func NewCreateMitigationPlanUseCase(
 	mitigationRepo repository.MitigationRepository,
-	subactionRepo repository.MitigationSubActionRepository,
+	_ repository.MitigationSubActionRepository,
 ) *CreateMitigationPlanUseCase {
 	return &CreateMitigationPlanUseCase{
 		mitigationRepo: mitigationRepo,
-		subactionRepo:  subactionRepo,
 	}
 }
 
@@ -75,6 +79,11 @@ type CreateMitigationPlanInput struct {
 type CreateMitigationPlanOutput struct {
 	ID    uuid.UUID
 	Error error
+
+	// Plan is the plan exactly as it was committed, checklist included. The
+	// handler answers from this rather than re-reading the row it just wrote:
+	// a failed read-back must never turn a committed write into a 5xx (#335).
+	Plan *domain.Mitigation
 }
 
 // Execute creates a mitigation plan.
@@ -140,12 +149,9 @@ func (uc *CreateMitigationPlanUseCase) ExecuteContext(ctx context.Context, input
 		mitigation.AssignedTo = domain.UUIDArray{*mitigation.AssigneeID}
 	}
 
-	// Create mitigation plan
-	if err := uc.mitigationRepo.Create(input.TenantID.String(), mitigation); err != nil {
-		return nil, fmt.Errorf("failed to create mitigation: %w", err)
-	}
-
-	// Create subactions if provided
+	// Build the checklist before touching the database, so the plan and its
+	// sub-actions can go in as one unit.
+	subActions := make([]*domain.MitigationSubAction, 0, len(input.SubActions))
 	for i, subActionInput := range input.SubActions {
 		subAction := &domain.MitigationSubAction{
 			ID:           uuid.New(),
@@ -159,9 +165,23 @@ func (uc *CreateMitigationPlanUseCase) ExecuteContext(ctx context.Context, input
 			subAction.DueDate = subActionInput.DueDate
 		}
 
-		if err := uc.subactionRepo.Create(input.TenantID.String(), subAction); err != nil {
-			return nil, fmt.Errorf("failed to create subaction: %w", err)
-		}
+		subActions = append(subActions, subAction)
+	}
+
+	// One transaction for the plan and the whole checklist: a failure part-way
+	// through leaves nothing behind, so a client that sees an error can retry
+	// without creating a second plan (#335). The transaction is opened in the
+	// repository because this layer must stay free of GORM.
+	if err := uc.mitigationRepo.CreateWithSubActions(input.TenantID.String(), mitigation, subActions); err != nil {
+		return nil, fmt.Errorf("failed to create mitigation: %w", err)
+	}
+
+	// Everything below runs AFTER the commit, deliberately. A notifier that is
+	// slow, or that fails, must not hold a database lock open on the create
+	// path and must not roll back a plan the user was told was saved.
+	mitigation.SubActions = make([]domain.MitigationSubAction, 0, len(subActions))
+	for _, subAction := range subActions {
+		mitigation.SubActions = append(mitigation.SubActions, *subAction)
 	}
 
 	// The actor is taken from the input rather than the context: this use case's
@@ -183,5 +203,5 @@ func (uc *CreateMitigationPlanUseCase) ExecuteContext(ctx context.Context, input
 		})
 	}
 
-	return &CreateMitigationPlanOutput{ID: mitigation.ID}, nil
+	return &CreateMitigationPlanOutput{ID: mitigation.ID, Plan: mitigation}, nil
 }

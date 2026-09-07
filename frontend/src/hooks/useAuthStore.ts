@@ -160,7 +160,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const { data } = await api.get('/auth/me');
     const profile = (data?.user ?? data) as Record<string, unknown> & { role?: { name?: string } };
     const base: User = { ...profile, role: profile.role?.name ?? '' } as User;
-    const user = withTokenClaims(base, accessToken);
+    // business_role sits on the MEMBERSHIP, so it arrives beside the user rather
+    // than inside it. Passing it through is what makes an MFA login land on the
+    // right persona: without it the role resolved to "" on every MFA sign-in,
+    // because the user object has no such field to fall back to (#338).
+    const user = withTokenClaims(base, accessToken, data?.business_role);
 
     localStorage.setItem('auth_user', JSON.stringify(user));
     set({ token: accessToken, user, isAuthenticated: true });
