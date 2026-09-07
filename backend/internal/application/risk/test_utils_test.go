@@ -32,7 +32,20 @@ type MockRiskRepository struct {
 	bulkUpdateFunc        func(ctx context.Context, tenantID uuid.UUID, updates []domain.RiskUpdate) (int64, error)
 	bulkCreateFunc        func(ctx context.Context, risks []*domain.Risk) (int64, error)
 	bulkDeleteFunc        func(ctx context.Context, ids []uuid.UUID, tenantID uuid.UUID) (int64, error)
+	bulkApplyFunc         func(ctx context.Context, tenantID uuid.UUID, ids []uuid.UUID, mutate func(*domain.Risk) error) ([]domain.RiskMutation, error)
 	listFunc              func(ctx context.Context, tenantID uuid.UUID, query domain.RiskQuery) (*domain.PaginatedResult[domain.Risk], error)
+}
+
+func (m *MockRiskRepository) BulkApply(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	ids []uuid.UUID,
+	mutate func(*domain.Risk) error,
+) ([]domain.RiskMutation, error) {
+	if m.bulkApplyFunc != nil {
+		return m.bulkApplyFunc(ctx, tenantID, ids, mutate)
+	}
+	return nil, nil
 }
 
 func (m *MockRiskRepository) Create(ctx context.Context, risk *domain.Risk) error {

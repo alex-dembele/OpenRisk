@@ -7,8 +7,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/lib/pq"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/opendefender/openrisk/internal/application/dashboard"
 	"github.com/opendefender/openrisk/internal/domain"
@@ -722,6 +725,94 @@ func (r *GormRiskRepository) BulkUpdate(ctx context.Context, tenantID uuid.UUID,
 	return updatedCount, nil
 }
 
+// BulkApply loads, mutates and saves every named risk inside ONE transaction.
+// See domain.RiskRepository.BulkApply for the contract; the short version is
+// all-or-nothing, and a foreign-tenant id is indistinguishable from a
+// fabricated one.
+func (r *GormRiskRepository) BulkApply(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	ids []uuid.UUID,
+	mutate func(*domain.Risk) error,
+) ([]domain.RiskMutation, error) {
+	if tenantID == uuid.Nil {
+		return nil, domain.NewForbiddenError("tenant_id is required")
+	}
+	if len(ids) == 0 {
+		return nil, domain.NewValidationError("at least one risk ID is required")
+	}
+
+	mutations := make([]domain.RiskMutation, 0, len(ids))
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Reset on every attempt: GORM retries nothing here today, but a closure
+		// that appends to an outer slice must not accumulate across invocations.
+		mutations = mutations[:0]
+
+		for _, id := range ids {
+			var risk domain.Risk
+			// The tenant predicate is on the load, which is what makes a foreign
+			// id fail exactly like an absent one — no branch anywhere can tell
+			// them apart, so no response can either.
+			//
+			// Locked FOR UPDATE: without it, a concurrent delete between this
+			// read and the Save would let the batch commit a write to a row that
+			// no longer exists, which is precisely the half-applied outcome this
+			// method exists to prevent. Skipped on SQLite, which has no row locks
+			// and serialises writers anyway (that is the test harness, never
+			// production).
+			q := tx.Where("id = ? AND tenant_id = ?", id, tenantID)
+			if tx.Dialector.Name() != "sqlite" {
+				q = q.Clauses(clause.Locking{Strength: "UPDATE"})
+			}
+			if err := q.First(&risk).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					// One missing id fails the whole batch. The message names the
+					// id because the caller supplied it — it is their own input
+					// echoed back, not a disclosure about another tenant.
+					return domain.NewNotFoundError("risk", id)
+				}
+				return fmt.Errorf("failed to load risk %s: %w", id, err)
+			}
+
+			before := risk.BulkSnapshot()
+			if err := mutate(&risk); err != nil {
+				return err
+			}
+			after := risk.BulkSnapshot()
+
+			if err := tx.Save(&risk).Error; err != nil {
+				return fmt.Errorf("failed to update risk %s: %w", id, err)
+			}
+
+			mutations = append(mutations, domain.RiskMutation{
+				RiskID:        id,
+				Before:        before,
+				After:         after,
+				ChangedFields: changedKeys(before, after),
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mutations, nil
+}
+
+// changedKeys names the snapshot keys whose value actually differs, in a stable
+// order. A bulk action that changes nothing for a given risk (removing a tag it
+// never carried) is then visible as an empty change rather than as a silent one.
+func changedKeys(before, after map[string]interface{}) []string {
+	changed := []string{}
+	for _, k := range []string{"status", "lifecycle_state", "assigned_to", "tags"} {
+		if !reflect.DeepEqual(before[k], after[k]) {
+			changed = append(changed, k)
+		}
+	}
+	return changed
+}
+
 // BulkCreate creates multiple risks atomically within a transaction.
 func (r *GormRiskRepository) BulkCreate(ctx context.Context, risks []*domain.Risk) (int64, error) {
 	tx := r.db.WithContext(ctx).Begin()
@@ -742,14 +833,41 @@ func (r *GormRiskRepository) BulkCreate(ctx context.Context, risks []*domain.Ris
 }
 
 // BulkDelete soft-deletes multiple risks atomically.
+// BulkDelete soft-deletes the named risks, all or none.
+//
+// The single UPDATE was already atomic; what it was not is STRICT. It matched
+// whatever it could and reported a count, so a selection containing one stale or
+// foreign id silently deleted the rest — the partial outcome D-036 rules out.
+// Now a short count rolls the statement back and reads as not-found, which is
+// also what makes a foreign-tenant id indistinguishable from a fabricated one.
+//
+// Callers must pass DISTINCT ids: the count comparison is what enforces
+// strictness, and a repeated id would make it fail spuriously.
 func (r *GormRiskRepository) BulkDelete(ctx context.Context, ids []uuid.UUID, tenantID uuid.UUID) (int64, error) {
-	result := r.db.WithContext(ctx).
-		Where("id IN ? AND tenant_id = ?", ids, tenantID).
-		Delete(&domain.Risk{})
-
-	if result.Error != nil {
-		return 0, fmt.Errorf("failed to bulk delete risks: %w", result.Error)
+	if tenantID == uuid.Nil {
+		return 0, domain.NewForbiddenError("tenant_id is required")
+	}
+	if len(ids) == 0 {
+		return 0, domain.NewValidationError("at least one risk ID is required")
 	}
 
-	return result.RowsAffected, nil
+	var deleted int64
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("id IN ? AND tenant_id = ?", ids, tenantID).
+			Delete(&domain.Risk{})
+		if result.Error != nil {
+			return fmt.Errorf("failed to bulk delete risks: %w", result.Error)
+		}
+		if result.RowsAffected != int64(len(ids)) {
+			// Which id was missing is not reported: naming it would confirm that
+			// the others exist, and the caller supplied the whole list anyway.
+			return domain.NewNotFoundError("risk", "one or more ids in the batch")
+		}
+		deleted = result.RowsAffected
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return deleted, nil
 }

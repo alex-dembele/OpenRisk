@@ -2106,148 +2106,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  # ==================== SAVED TABLE VIEWS (#580) ====================
-  # A named combination of search, facets, sort and column layout for ONE
-  # register, stored server-side so it survives a browser and can be handed to
-  # a colleague. `table_id` is the register the view belongs to ("risks",
-  # "vulnerabilities", "assets", …) — the id the frontend DataTable is mounted
-  # with.
-  #
-  # Isolation contract, which the 404s below encode deliberately: a view of
-  # another tenant, and another user's PERSONAL view inside the same tenant,
-  # both answer 404 — identical to a fabricated id. A 403 would confirm the row
-  # exists, and a view's filter values name that institution's assets, tags and
-  # people. 403 appears only for a SHARED view the caller can already see.
-  /saved-views:
-    get:
-      tags:
-        - Saved Views
-      summary: List the saved views the caller may see
-      description: >-
-        The caller's own views for the table, whatever their visibility, plus
-        every view their colleagues in the same tenant chose to share. Omitting
-        table_id returns every register's views.
-      operationId: listSavedViews
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: table_id
-          in: query
-          required: false
-          schema:
-            type: string
-            maxLength: 64
-          description: Narrow the listing to one register (e.g. "risks").
-      responses:
-        '200':
-          description: The visible saved views, ordered by name
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SavedView'
-        '401':
-          description: Unauthorized
-        '403':
-          description: No tenant or user in the session context
-
+  # ==================== RISK BULK ACTIONS (#581) ====================
+  /risks/bulk:
     post:
       tags:
-        - Saved Views
-      summary: Save a view of a register
-      operationId: createSavedView
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateSavedViewInput'
-      responses:
-        '201':
-          description: The stored view
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SavedView'
-        '400':
-          description: Invalid input
-        '401':
-          description: Unauthorized
-        '409':
-          description: The caller already has a view of that name on that table
-
-  /saved-views/{id}:
-    patch:
-      tags:
-        - Saved Views
-      summary: Update a saved view
+        - Risks
+      summary: Apply one action to many risks, all or none
       description: >-
-        A patch — an omitted field is left alone, so renaming a view never
-        resets its filters. The caller must own the view or be a tenant admin.
-      operationId: updateSavedView
+        All-or-nothing (decision D-036). Either every named risk is modified or
+        none is: the batch runs in a single transaction, and one stale, foreign
+        or otherwise unresolvable id fails the whole request without writing
+        anything. There is deliberately no per-item outcome to report.
+
+        One audit entry is written per modified risk, carrying the acting user.
+
+        A risk id belonging to another tenant answers 404 — identical to a
+        fabricated id — because the tenant predicate is part of the row load.
+      operationId: bulkRiskAction
       security:
         - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateSavedViewInput'
+              $ref: '#/components/schemas/BulkRiskActionInput'
       responses:
         '200':
-          description: The updated view
+          description: The batch was applied in full
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SavedView'
+                $ref: '#/components/schemas/BulkRiskActionResult'
         '400':
-          description: Invalid input
+          description: >-
+            Validation error — empty selection, more than 100 items, an unknown
+            action type, or a missing action parameter.
         '401':
           description: Unauthorized
         '403':
-          description: A shared view owned by another user, and the caller is not a tenant admin
+          description: The caller lacks risks:update, or the session carries no tenant
         '404':
           description: >-
-            Not found, another tenant's view, or another user's personal view —
-            deliberately indistinguishable.
-        '409':
-          description: The new name collides with another of the owner's views on that table
-
-    delete:
-      tags:
-        - Saved Views
-      summary: Delete a saved view
-      operationId: deleteSavedView
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: Deleted
-        '401':
-          description: Unauthorized
-        '403':
-          description: A shared view owned by another user, and the caller is not a tenant admin
-        '404':
-          description: >-
-            Not found, another tenant's view, or another user's personal view —
-            deliberately indistinguishable.
+            At least one id could not be resolved — absent, or belonging to
+            another tenant, deliberately indistinguishable. Nothing was modified.
 
 # ==================== COMPONENTS ====================
 components:
@@ -3851,134 +3753,66 @@ components:
           type: string
           format: date-time
 
-    SavedViewSort:
+    BulkRiskActionInput:
       type: object
       required:
-        - key
+        - type
+        - risk_ids
       properties:
-        key:
+        type:
           type: string
-          description: Column key the view sorts on.
-        dir:
-          type: string
-          enum: [asc, desc]
-          default: desc
-
-    SavedViewState:
-      type: object
-      description: >-
-        The part of the table state a view restores. Page and page size are
-        deliberately absent — "page 3" is not part of what a view means.
-      properties:
-        q:
-          type: string
-          description: Instant search term.
-        filters:
-          type: object
-          description: Facet key to selected values.
-          additionalProperties:
-            type: array
-            items:
-              type: string
-        sort:
-          oneOf:
-            - $ref: '#/components/schemas/SavedViewSort'
-            - type: 'null'
-
-    SavedViewColumns:
-      type: object
-      description: Per-user column layout. Unknown keys are dropped by the client on read.
-      properties:
-        order:
+          enum: [change_status, assign_to, add_tags, remove_tags, delete]
+        risk_ids:
           type: array
+          minItems: 1
+          maxItems: 100
+          description: Repeated ids are de-duplicated before the batch runs.
           items:
             type: string
-        hidden:
+            format: uuid
+        status:
+          type: string
+          description: Required for change_status.
+        assign_to_id:
+          type: string
+          format: uuid
+          description: Required for assign_to.
+        tags:
           type: array
+          description: Required for add_tags and remove_tags. Removing an absent tag is a no-op.
           items:
             type: string
+        justification:
+          type: string
+          description: Recorded on each audit entry.
 
-    SavedView:
+    BulkRiskActionResult:
       type: object
       required:
-        - id
-        - tenant_id
-        - user_id
-        - table_id
-        - name
-        - visibility
+        - total
+        - applied
+        - risk_ids
+        - audited
       properties:
-        id:
-          type: string
-          format: uuid
-        tenant_id:
-          type: string
-          format: uuid
-        user_id:
-          type: string
-          format: uuid
-          description: The owner — the only user who may edit it, plus tenant admins.
-        table_id:
-          type: string
-          maxLength: 64
-        name:
-          type: string
-          maxLength: 120
-        visibility:
-          type: string
-          enum: [personal, shared]
+        total:
+          type: integer
+          description: How many distinct risks were named.
+        applied:
+          type: integer
           description: >-
-            personal — visible only to its owner. shared — visible to every
-            member of the same tenant. Sharing never crosses a tenant.
-        state:
-          $ref: '#/components/schemas/SavedViewState'
-        columns:
-          $ref: '#/components/schemas/SavedViewColumns'
-        owner_email:
-          type: string
-          description: Resolved on read for display ("shared by Amina"); may be absent.
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-
-    CreateSavedViewInput:
-      type: object
-      required:
-        - table_id
-        - name
-      properties:
-        table_id:
-          type: string
-          maxLength: 64
-        name:
-          type: string
-          maxLength: 120
-        visibility:
-          type: string
-          enum: [personal, shared]
-          default: personal
-        state:
-          $ref: '#/components/schemas/SavedViewState'
-        columns:
-          $ref: '#/components/schemas/SavedViewColumns'
-
-    UpdateSavedViewInput:
-      type: object
-      description: A patch — every field is optional and an omitted one is left alone.
-      properties:
-        name:
-          type: string
-          maxLength: 120
-        visibility:
-          type: string
-          enum: [personal, shared]
-        state:
-          $ref: '#/components/schemas/SavedViewState'
-        columns:
-          $ref: '#/components/schemas/SavedViewColumns'
+            Equals total on success. A failure is an HTTP error, not a partial
+            number, so this is never a shortfall.
+        risk_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        audited:
+          type: integer
+          description: >-
+            Audit entries written. Below applied only if the trail was
+            unavailable; the mutation still happened, and the gap is reported
+            rather than hidden.
 
     ErrorResponse:
       type: object

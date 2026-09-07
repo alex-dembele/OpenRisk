@@ -401,6 +401,35 @@ func (r *Risk) AfterSave(tx *gorm.DB) error {
 	return tx.Create(&history).Error
 }
 
+// BulkSnapshot captures the fields a bulk action is allowed to change, and only
+// those. It is what the audit journal's before → after is built from.
+//
+// Deliberately narrow: a bulk action changes a handful of named fields, so
+// journalling the whole risk would bury the change in noise and drag unrelated
+// columns (including any added later) into the trail. Nothing secret is in here
+// — RULE #6.
+func (r *Risk) BulkSnapshot() map[string]interface{} {
+	if r == nil {
+		return map[string]interface{}{}
+	}
+	var assignedTo interface{}
+	if r.AssignedTo != nil {
+		assignedTo = r.AssignedTo.String()
+	}
+	// Copy the slice: the snapshot must not alias the live risk, or mutating the
+	// tags would retroactively rewrite the "before" the caller already took.
+	tags := make([]string, len(r.Tags))
+	copy(tags, r.Tags)
+	return map[string]interface{}{
+		"status": string(r.Status),
+		// The canonical state travels with the status: SetState derives both, and
+		// a trail that showed one without the other would not explain the change.
+		"lifecycle_state": string(r.State()),
+		"assigned_to":     assignedTo,
+		"tags":            tags,
+	}
+}
+
 // OwnershipBlock implements OwnedEntity.
 func (r *Risk) OwnershipBlock() *Ownership { return &r.Ownership }
 

@@ -1272,28 +1272,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/saved-views": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the saved views the caller may see
-         * @description The caller's own views for the table, whatever their visibility, plus every view their colleagues in the same tenant chose to share. Omitting table_id returns every register's views.
-         */
-        get: operations["listSavedViews"];
-        put?: never;
-        /** Save a view of a register */
-        post: operations["createSavedView"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/saved-views/{id}": {
+    "/risks/bulk": {
         parameters: {
             query?: never;
             header?: never;
@@ -1302,16 +1281,17 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        /** Delete a saved view */
-        delete: operations["deleteSavedView"];
+        /**
+         * Apply one action to many risks, all or none
+         * @description All-or-nothing (decision D-036). Either every named risk is modified or none is: the batch runs in a single transaction, and one stale, foreign or otherwise unresolvable id fails the whole request without writing anything. There is deliberately no per-item outcome to report.
+         *     One audit entry is written per modified risk, carrying the acting user.
+         *     A risk id belonging to another tenant answers 404 — identical to a fabricated id — because the tenant predicate is part of the row load.
+         */
+        post: operations["bulkRiskAction"];
+        delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Update a saved view
-         * @description A patch — an omitted field is left alone, so renaming a view never resets its filters. The caller must own the view or be a tenant admin.
-         */
-        patch: operations["updateSavedView"];
+        patch?: never;
         trace?: never;
     };
 }
@@ -2353,74 +2333,31 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
-        SavedViewSort: {
-            /** @description Column key the view sorts on. */
-            key: string;
-            /**
-             * @default desc
-             * @enum {string}
-             */
-            dir: "asc" | "desc";
-        };
-        /** @description The part of the table state a view restores. Page and page size are deliberately absent — "page 3" is not part of what a view means. */
-        SavedViewState: {
-            /** @description Instant search term. */
-            q?: string;
-            /** @description Facet key to selected values. */
-            filters?: {
-                [key: string]: string[];
-            };
-            sort?: components["schemas"]["SavedViewSort"] | null;
-        };
-        /** @description Per-user column layout. Unknown keys are dropped by the client on read. */
-        SavedViewColumns: {
-            order?: string[];
-            hidden?: string[];
-        };
-        SavedView: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenant_id: string;
+        BulkRiskActionInput: {
+            /** @enum {string} */
+            type: "change_status" | "assign_to" | "add_tags" | "remove_tags" | "delete";
+            /** @description Repeated ids are de-duplicated before the batch runs. */
+            risk_ids: string[];
+            /** @description Required for change_status. */
+            status?: string;
             /**
              * Format: uuid
-             * @description The owner — the only user who may edit it, plus tenant admins.
+             * @description Required for assign_to.
              */
-            user_id: string;
-            table_id: string;
-            name: string;
-            /**
-             * @description personal — visible only to its owner. shared — visible to every member of the same tenant. Sharing never crosses a tenant.
-             * @enum {string}
-             */
-            visibility: "personal" | "shared";
-            state?: components["schemas"]["SavedViewState"];
-            columns?: components["schemas"]["SavedViewColumns"];
-            /** @description Resolved on read for display ("shared by Amina"); may be absent. */
-            owner_email?: string;
-            /** Format: date-time */
-            created_at?: string;
-            /** Format: date-time */
-            updated_at?: string;
+            assign_to_id?: string;
+            /** @description Required for add_tags and remove_tags. Removing an absent tag is a no-op. */
+            tags?: string[];
+            /** @description Recorded on each audit entry. */
+            justification?: string;
         };
-        CreateSavedViewInput: {
-            table_id: string;
-            name: string;
-            /**
-             * @default personal
-             * @enum {string}
-             */
-            visibility: "personal" | "shared";
-            state?: components["schemas"]["SavedViewState"];
-            columns?: components["schemas"]["SavedViewColumns"];
-        };
-        /** @description A patch — every field is optional and an omitted one is left alone. */
-        UpdateSavedViewInput: {
-            name?: string;
-            /** @enum {string} */
-            visibility?: "personal" | "shared";
-            state?: components["schemas"]["SavedViewState"];
-            columns?: components["schemas"]["SavedViewColumns"];
+        BulkRiskActionResult: {
+            /** @description How many distinct risks were named. */
+            total: number;
+            /** @description Equals total on success. A failure is an HTTP error, not a partial number, so this is never a shortfall. */
+            applied: number;
+            risk_ids: string[];
+            /** @description Audit entries written. Below applied only if the trail was unavailable; the mutation still happened, and the gap is reported rather than hidden. */
+            audited: number;
         };
         ErrorResponse: {
             /** @example Invalid input */
@@ -4950,44 +4887,7 @@ export interface operations {
             };
         };
     };
-    listSavedViews: {
-        parameters: {
-            query?: {
-                /** @description Narrow the listing to one register (e.g. "risks"). */
-                table_id?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The visible saved views, ordered by name */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SavedView"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No tenant or user in the session context */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    createSavedView: {
+    bulkRiskAction: {
         parameters: {
             query?: never;
             header?: never;
@@ -4996,20 +4896,20 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateSavedViewInput"];
+                "application/json": components["schemas"]["BulkRiskActionInput"];
             };
         };
         responses: {
-            /** @description The stored view */
-            201: {
+            /** @description The batch was applied in full */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SavedView"];
+                    "application/json": components["schemas"]["BulkRiskActionResult"];
                 };
             };
-            /** @description Invalid input */
+            /** @description Validation error — empty selection, more than 100 items, an unknown action type, or a missing action parameter. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5023,110 +4923,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The caller already has a view of that name on that table */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    deleteSavedView: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description A shared view owned by another user, and the caller is not a tenant admin */
+            /** @description The caller lacks risks:update, or the session carries no tenant */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Not found, another tenant's view, or another user's personal view — deliberately indistinguishable. */
+            /** @description At least one id could not be resolved — absent, or belonging to another tenant, deliberately indistinguishable. Nothing was modified. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    updateSavedView: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateSavedViewInput"];
-            };
-        };
-        responses: {
-            /** @description The updated view */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SavedView"];
-                };
-            };
-            /** @description Invalid input */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description A shared view owned by another user, and the caller is not a tenant admin */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not found, another tenant's view, or another user's personal view — deliberately indistinguishable. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description The new name collides with another of the owner's views on that table */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

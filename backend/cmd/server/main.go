@@ -1293,7 +1293,13 @@ func main() {
 		)).
 		WithApprovals(newApprovalChecker(repository.NewGormApprovalRepository(database.DB)))
 	riskHandler := handlers.NewRiskHandler(createRiskUseCase, getRiskUseCase, listRisksUseCase, updateRiskUseCase, deleteRiskUseCase, markReviewedUseCase, transitionStateUseCase, redisClientInstance, riskQuantifier).
-		WithFinancialPresenters(financialPresenters)
+		WithFinancialPresenters(financialPresenters).
+		// #581 — bulk actions are transactional and audited. The journal is a
+		// REQUIRED constructor argument, not an optional extra: the previous
+		// implementation accepted a performedBy and discarded it, so a supervisor
+		// asking "who reassigned these and when" had no answer. auditChainRepo is
+		// the same hash-chained, append-only store the rest of the trail uses.
+		WithBulkAction(risk.NewBulkActionUseCase(riskRepo, auditChainRepo))
 
 	// Financial Risk Quantification (spec §9): tenant-wide CFO/CISO dashboard
 	// (portfolio FAIR-lite P10/P50/P90, ALE, worst-case, residual, remediation
@@ -1342,6 +1348,20 @@ func main() {
 	riskCreate := middleware.RequirePermission("risks:create")
 	riskUpdate := middleware.RequirePermission("risks:update")
 	riskDelete := middleware.RequirePermission("risks:delete")
+
+	// Bulk actions (#581, D-036 option A: all-or-nothing). Guarded by
+	// risks:update — the endpoint mutates the register, so read access is not
+	// enough, and criterion 8 of #581 is this middleware, not a check in the
+	// handler.
+	//
+	// Registered BEFORE the parameterised risk routes so "bulk" can never be
+	// parsed as a risk id, the same Fiber trap as /assets/statistics.
+	//
+	// Until now this endpoint existed only inside the RegisterRoutes method of
+	// internal/api/http/handlers, which nothing calls — the package is not wired
+	// into main.go (see gorm_risk_repository.go:638). So the use case was
+	// unreachable, and #581's fixes would have landed in dead code.
+	protected.Post("/risks/bulk", riskUpdate, riskHandler.BulkAction)
 
 	protected.Post("/risks", riskCreate, capRisks, riskHandler.CreateRisk)
 	protected.Patch("/risks/:id", riskUpdate, riskHandler.UpdateRisk)

@@ -11,6 +11,47 @@ None. Every entry in this register is resolved as of 2026-09-07.
 
 <!-- Append: date · decision · rationale · issues unblocked -->
 
+### D-036 — bulk mutations are all-or-nothing · 2026-09-07
+**Decided** — **Option A**, all-or-nothing. A bulk action either applies to every
+named risk or to none of them. Raised by `po-openrisk` while refining **#235**;
+the entry was written on `chore/decisions-round-2026-09-07` (commit `773fd80`)
+but PR #579 merged that branch at an earlier commit, so D-036 never reached
+`master` and this is its first appearance in the register.
+
+**The question** — `POST /api/v1/risks/bulk` applied what it could, per item, in
+a loop with no transaction, and reported a tally. The file's own doc comments
+claimed *"MANDATORY: All operations must be atomic within a transaction"* and
+*"all succeed or all fail"*. The comments described option A; the code
+implemented option B. Both could not stay.
+
+**Rationale** — For an institution supervised by COBAC or the BCEAO, "31 of your
+40 risks were reassigned and we cannot tell you which" is a supervisory finding;
+a clean rollback is not. Option B (governed partial success, with a reversal
+entry per applied item) was materially more work and contradicted both the
+acceptance criterion and ABSOLUTE RULE 7.
+
+**The cost the register weighed against A turned out to be zero.** D-036 priced
+option A as a breaking change because "any client reading `Failed` must change".
+Measured on the tree: no client reads it. `riskService.bulkAction` returned
+`Promise<void>` and discarded the body, and its only consumer invalidated a query
+cache `onSettled`. The response shape could be corrected with no behavioural
+frontend work at all.
+
+**Found while implementing, and worth recording** — the endpoint was **not
+reachable**. `POST /api/v1/risks/bulk` was mounted only inside
+`RegisterRoutes` on `internal/api/http/handlers`, a package nothing imports and
+whose `RegisterRoutes` is never called — already documented at
+`gorm_risk_repository.go:638`. The frontend's `bulkAction` was called by no
+component, and its request shape (`action` + a nested `payload`) did not match
+the API's (`type` + flat parameters) either. So the harm #581 described could not
+actually occur; the defects were real, the user impact was not. The endpoint is
+now wired behind `risks:update`, which is what makes #581's criteria 4 and 8
+testable rather than hypothetical.
+
+**Issues unblocked** — **#581** (child B of #235) moves from `status:blocked`.
+Child C (bulk for the other six registers) stays blocked behind #581 by design,
+so the corrected pattern is the one that gets copied.
+
 ### D-034 — billing: the trial stays self-service, checkout goes admin-only · 2026-09-07
 **Decided** — Option B, **against the implementation on the branch** (which was A, both
 admin-only). `POST /billing/checkout` keeps `middleware.RequireRole("admin", "root")`;
