@@ -5,6 +5,134 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
+### D-029 — release trains replace the eight waves as the planning unit · raised 2026-09-04 · **pending**
+**Raised by** — `po-openrisk`, executing the founder's strategic note of 2026-09-04.
+**Issues** — #570 (epic) and the six new milestones.
+
+**The question** — Axe F of the note asks for "des releases thématiques (ex: Release 1.2 -
+Risk Auto-Draft)" instead of technical waves. I have created six milestones — `Release 1.2 —
+Risk Data Plane` through `Release 1.6 — IT-native & Ecosystem`, plus `Backlog — deferred
+(Tier 5)` — and moved 46 open issues into them. **The eight `Wave` milestones still exist and
+still hold 44 open issues.** That is the decision: do the waves get retired, with their
+remaining issues redistributed, or do both families coexist?
+
+**Recommendation** — **retire the waves, redistribute their issues.** Two milestone families
+is the same mistake D-003 accepted for labels, and the cost there is visible: every issue now
+carries two priority labels that can disagree, and they do. Milestones are worse than labels
+for this, because a milestone is what a burn-down and the `/plan-milestone` skill read. An
+issue in `Wave 4 — GRC` and an issue in `Release 1.4 — Evidence Fabric` cannot both be "the
+current milestone". If the owner prefers to keep the waves as an archive, they should be
+closed rather than left open, so nothing new can be filed into them.
+
+**What I did not do** — I did not retire them. Reshaping milestone scope is an escalation
+under CLAUDE.md, so the waves are untouched and the moves I made are reversible one by one.
+
+**Cost of delay** — moderate and rising. Until this is answered the backlog has two competing
+plans, and every new issue forces an agent to guess which family it belongs to. Answer before
+the next milestone planning round.
+
+---
+
+### D-030 — adopt the OpenRisk Canonical Model, and commit to OSCAL as an interchange format · raised 2026-09-04 · **pending**
+**Raised by** — `po-openrisk`. **Issues** — #541, #542, #543, #566, epic #535.
+
+**The question** — two commitments, one decision, because the second is only worth making if
+the first is:
+
+1. **A canonical domain model** — 17 entities with a mandatory envelope (`source`,
+   `source_id`, `source_version`, `observed_at`, `confidence`, `provenance`, `relationships`)
+   and a fixed relationship vocabulary, published as `openrisk-schema.json` with a semver
+   compatibility promise. This is the largest architectural commitment in the project's
+   history: it touches every table, every integration and every module, and once external
+   parties build against the published schema, breaking it costs them, not just us.
+2. **OSCAL** — NIST's machine-readable format for controls, profiles, implementations and
+   assessment results, as our import/export interchange. This is a dependency on an external
+   standard's evolution.
+
+**Recommendation** — **accept both, in that order, with 1 as an ADR before any code.** The
+note's argument is right and it is the strategic core of the whole document: without a
+canonical model we accumulate connectors until they are unmaintainable, and every automation
+ambition in the roadmap sits on sand. OSCAL is a smaller decision and a large credibility
+return with regulated and public-sector buyers — but it is only coherent *after* the canonical
+model, because OSCAL then maps onto something stable rather than onto our current table shapes.
+
+**What this costs if wrong** — a canonical model that turns out to be badly factored is
+expensive to change after external adoption, which is exactly why #541 asks for an ADR and an
+explicit out-of-scope list rather than an implementation.
+
+**Cost of delay** — high. Eleven open issues are blocked behind #541, and both killer
+workflows depend on it. This is the decision to answer first.
+
+---
+
+### D-031 — nine issues are deferred to Tier 5 · raised 2026-09-04 · **pending confirmation**
+**Raised by** — `po-openrisk`. **Issues** — #509, #510, #511, #512, #513, #397, #222, #205, #403.
+
+**The question** — the note is explicit that exotic visualisations, the Digital Twin and
+Attack Path work should not precede the risk-to-evidence-to-mitigation chain. I have moved
+those nine to `Backlog — deferred (Tier 5)` and commented the reason on each. Cutting scope is
+an escalation, so this is here for confirmation rather than as a fait accompli.
+
+- **Charts** (#509 Sankey, #510 Choropleth, #511 Candlestick, #512 Scatter, #513 Brush) — none
+  has an identified consumer. #512 says so in its own title.
+- **Too early** (#397 and #222 Digital Twin, #205 Attack Graph, #403 blast radius) — all four
+  are graph and simulation work whose output quality is capped by data quality. Built before
+  the Risk Data Plane, they simulate our normalization gaps rather than the customer's
+  environment.
+
+**Recommendation** — **confirm.** Nothing is closed; every spec survives intact and returns
+the moment a Tier 1 or Tier 2 issue names it as a requirement, which is a stronger position
+than being built speculatively now.
+
+**Cost of delay** — none. The moves are already made and are reversible in one command each.
+Say the word if any of the nine should come back.
+
+---
+
+### D-032 — a `tier:` label prefix, or tiers stay in milestones only · raised 2026-09-04 · **pending**
+**Raised by** — `po-openrisk`. **Issue** — #570.
+
+**The question** — the note's tier model (Tier 0 Trust · 1 Product engine · 2 Killer workflows ·
+3 Ecosystem · 4 UX · 5 Deferred) is the sharpest instrument in the whole document, and it is
+the one thing I could not implement. CLAUDE.md says the label taxonomy is fixed and no agent
+invents a prefix. So tiers currently live only in milestone names and in #570's body, where
+they cannot be filtered on.
+
+**Recommendation** — **authorise a `tier:` prefix with exactly those six values, and no
+seventh.** A tier is orthogonal to `priority:` and answers a different question: priority says
+how urgent, tier says how strategic, and the note's entire argument is that we keep confusing
+the two. The cost is one more label per issue on a repository that D-003 already committed to
+double-labelling. The alternative — tiers as milestones only — means an issue's tier changes
+when it is scheduled, which defeats the purpose.
+
+**If the answer is no**, that is a perfectly workable outcome: #570 then records tiers in
+`ROADMAP.md` as a static table, and the milestone name carries the signal. Say so and I will
+stop asking.
+
+**Cost of delay** — low. #570 proceeds either way.
+
+---
+
+### D-033 — the positioning line, after the name is settled · raised 2026-09-04 · **pending**
+**Raised by** — `po-openrisk`. **Issues** — #571 (`status:blocked`), depends on #492.
+
+**The question** — the note proposes replacing *Unified Risk & Threat Intelligence Management
+Platform* with a line built on "continuous risk intelligence", offering three candidates, and
+proposes replacing the internal "anti-spreadsheet" framing with "anti-manual-control-plane".
+Brand naming and positioning are owner-only.
+
+**Recommendation** — **do not decide this yet.** #492 has not settled OpenRisk versus Karath,
+and a tagline chosen before the name is a tagline written twice. More importantly, every
+candidate line is a *claim about continuous behaviour we have not shipped*: under ABSOLUTE
+RULE 12 we may not put "continuous risk intelligence" on a website until #535 and #536 are
+real. The right sequence is #492, then the killer workflow, then the line — tested on the
+three pilot organisations from #494 rather than chosen in a room.
+
+**Cost of delay** — none until the GTM milestone needs public copy. #571 is parked at
+`status:blocked` and will not be picked up.
+
+---
+
 ### D-028 — where the `Idempotency-Key` record lives, and which endpoints must carry it · raised 2026-09-03 · **pending**
 **Raised by** — `po-openrisk`, splitting #335. **Issue** — #517 (`status:needs-refinement`).
 

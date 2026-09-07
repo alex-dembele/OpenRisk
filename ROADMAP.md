@@ -24,6 +24,70 @@ fausses sur `SetContext`, sur l'architecture réelle des Assets, et sur toute la
 
 ---
 
+## Priorisation — tiers de backlog et trains de release (2026-09-04)
+
+> Ajouté le 2026-09-04 d'après la note stratégique du fondateur. Cette section dit **dans
+> quel ordre** on travaille. Les sections module-par-module qui suivent disent **où on en
+> est** ; elles ne changent pas. Épic de suivi : **#570**. Décisions en attente :
+> **D-029** (retirer ou non les 8 Waves), **D-030** (modèle canonique + OSCAL),
+> **D-031** (les 9 reports en Tier 5), **D-032** (préfixe de label `tier:`).
+
+### Les six tiers
+
+Le backlog compte plus de 200 issues ouvertes et elles n'ont pas le même poids stratégique.
+Le problème n'est pas qu'elles soient mauvaises — c'est qu'un défaut d'isolation multi-tenant
+et un graphique Sankey occupent le même espace visuel dans une liste.
+
+| Tier | Contenu | Règle |
+|---|---|---|
+| **0 — Trust** | multi-tenancy, authz, intégrité de l'audit, intégrité des données, secrets, SSO, RBAC, sauvegarde et restauration | Rien d'autre ne sort tant qu'un P0 de ce tier est ouvert |
+| **1 — Moteur produit** | modèle de données canonique, ingestion d'événements, corrélation, moteur de risque, moteur de preuve, moteur de workflow, provenance | La plateforme. Tout le reste en dépend |
+| **2 — Killer workflows** | Signal → Risque · Contrôle → Preuve · Finding → Mitigation · Risque → Impact financier | Ce que le client achète |
+| **3 — Écosystème** | connecteurs, webhooks, SDK, API, OSCAL, marketplace, plugins | Ce qui nous rend difficiles à remplacer |
+| **4 — UX** | design system, graphiques, animations, finition des tableaux de bord | Du vrai travail, mais qui suit le moteur |
+| **5 — Reporté** | gamification, visualisations exotiques, fonctionnalités que personne ne demande | Garé, délibérément, et par écrit |
+
+Le test à poser sur chaque issue, et désormais dans le gabarit d'issue (#563) :
+**cette fonctionnalité crée-t-elle de la valeur, ou seulement l'impression de sophistication ?**
+
+### Les sept phases
+
+1. **Stabiliser** — multi-tenancy, RBAC, auth, piste d'audit, intégrité des données, sécurité, CI → `trust-v1`
+2. **Risk Data Plane** — schéma canonique, bus d'événements, normalisation, provenance, corrélation, graphe d'entités → `Release 1.2`
+3. **Deux killer workflows** — Signal → Risque → Action → Preuve · Contrôle → Test → Preuve → Écart → Risque → Remédiation → `Release 1.3` et `Release 1.4`
+4. **IA gouvernée** — l'IA propose, l'humain approuve, le système enregistre → `Release 1.5`
+5. **Evidence fabric** — preuve continue, historique immuable, portail auditeur, dossier d'audit → `Release 1.4`
+6. **Écosystème** — SDK, webhooks, API, OSCAL, connecteurs, plugins → `Release 1.6`
+7. **Échelle** — multi-org, entreprise, SaaS, marketplace, benchmarking → à planifier
+
+### L'étoile polaire : Time to Govern
+
+Le temps entre **le premier signal détecté** et **un risque compris + un propriétaire assigné +
+une action créée + une preuve disponible**. Le GRC classique met 2 à 6 heures de travail
+d'analyste. La cible est de quelques minutes. Mesure : #560.
+
+Les cinq KPI qui la soutiennent (#561), avec leur valeur d'aujourd'hui — dont les zéros honnêtes :
+
+| KPI | Aujourd'hui | Cible |
+|---|---|---|
+| Time to First Value | non mesuré | < 30 min |
+| Automation Rate (champs remplis automatiquement) | ~0 % | > 80 % |
+| Evidence Automation Rate | ~0 % | > 60 % |
+| Closed-loop Rate | 0 % | > 50 % |
+| Human Touches per Risk | ~17 | 3 |
+
+> **Aucun de ces chiffres n'est mesuré aujourd'hui.** Les valeurs « aujourd'hui » sont des
+> estimations issues de la note stratégique, pas des mesures. #560 et #561 doivent fusionner
+> **avant** #547, sinon la ligne de base n'en est pas une et la règle ABSOLUE 12 nous interdira
+> de publier la moindre amélioration.
+
+### Ce que ce document ne dit pas
+
+Cette section réorganise. Elle ne livre rien. Aucun statut de module ci-dessous ne change du
+fait de son ajout, et la valeur produit viendra des Tiers 1 et 2, pas de la classification.
+
+---
+
 ## Gate 0 — Harnais E2E & Audit UX (2026-07-24) · N/A (instrument, pas une feature)
 
 Branche `test/e2e-ci-and-ux-audit`. **Aucun bug produit corrigé** (règle de la session) ;
