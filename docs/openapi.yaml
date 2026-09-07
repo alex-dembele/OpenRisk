@@ -2151,6 +2151,200 @@ paths:
             At least one id could not be resolved — absent, or belonging to
             another tenant, deliberately indistinguishable. Nothing was modified.
 
+  # ==================== GOVERNED BULK OPERATIONS (#582) ====================
+
+  /vulnerabilities/bulk/capabilities:
+    get:
+      tags: [Vulnerabilities]
+      summary: Which bulk actions this register supports
+      description: >-
+        A compiled-in vocabulary, identical for every tenant, so the bulk bar
+        never offers an action the server would refuse. No table is read.
+      operationId: vulnerabilitiesBulkCapabilities
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: The supported actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkCapabilities'
+        '403': {description: The caller lacks read access to this register}
+
+  /vulnerabilities/bulk/preview:
+    post:
+      tags: [Vulnerabilities]
+      summary: What a bulk action would change — mutates nothing
+      description: >-
+        Returns the affected count and a bounded sample of exactly what would
+        change, and writes nothing. Also returns a `fingerprint`: send it back
+        with the apply and a selection that moved underneath the user is refused
+        with 409 rather than silently applied to the new set.
+
+        Behind the register's read permission — it discloses only the current
+        state of rows the caller can already fetch individually.
+      operationId: vulnerabilitiesBulkPreview
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkPreviewInput'
+      responses:
+        '200':
+          description: The impact statement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkPreview'
+        '400': {description: Validation error}
+        '403': {description: The caller lacks read access, or the session carries no tenant}
+
+  /vulnerabilities/bulk/change-status:
+    post:
+      tags: [Vulnerabilities]
+      summary: Apply "change_status" to many rows, all or none
+      description: >-
+        All-or-nothing (decision D-036): either every named row is changed or
+        none is. One audit entry is written per modified row, carrying the acting
+        user. Rows from another tenant answer 404, identical to fabricated ids.
+
+        The action is fixed by the route, not read from the body, so this
+        endpoint's permission always matches what it performs. Requires
+        `vulnerabilities:update`.
+      operationId: vulnerabilitiesBulkChangeStatus
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkApplyInput'
+      responses:
+        '200':
+          description: The batch was applied in full
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkResult'
+        '400': {description: Validation error — empty selection, over 100 items, or an invalid status}
+        '403': {description: The caller lacks vulnerabilities:update, or the session carries no tenant}
+        '404': {description: An id did not resolve — absent, or another tenant's, deliberately indistinguishable. Nothing was modified.}
+        '409': {description: The selection changed since it was previewed. Nothing was modified.}
+
+  /vulnerabilities/bulk/delete:
+    post:
+      tags: [Vulnerabilities]
+      summary: Apply "delete" to many rows, all or none
+      description: >-
+        All-or-nothing (decision D-036): either every named row is changed or
+        none is. One audit entry is written per modified row, carrying the acting
+        user. Rows from another tenant answer 404, identical to fabricated ids.
+
+        The action is fixed by the route, not read from the body, so this
+        endpoint's permission always matches what it performs. Requires
+        `vulnerabilities:delete`.
+      operationId: vulnerabilitiesBulkDelete
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkApplyInput'
+      responses:
+        '200':
+          description: The batch was applied in full
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkResult'
+        '400': {description: Validation error — empty selection, over 100 items, or an invalid status}
+        '403': {description: The caller lacks vulnerabilities:delete, or the session carries no tenant}
+        '404': {description: An id did not resolve — absent, or another tenant's, deliberately indistinguishable. Nothing was modified.}
+        '409': {description: The selection changed since it was previewed. Nothing was modified.}
+
+  /assets/bulk/capabilities:
+    get:
+      tags: [Assets]
+      summary: Which bulk actions this register supports
+      description: >-
+        A compiled-in vocabulary, identical for every tenant, so the bulk bar
+        never offers an action the server would refuse. No table is read.
+      operationId: assetsBulkCapabilities
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: The supported actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkCapabilities'
+        '403': {description: The caller lacks read access to this register}
+
+  /assets/bulk/preview:
+    post:
+      tags: [Assets]
+      summary: What a bulk action would change — mutates nothing
+      description: >-
+        Returns the affected count and a bounded sample of exactly what would
+        change, and writes nothing. Also returns a `fingerprint`: send it back
+        with the apply and a selection that moved underneath the user is refused
+        with 409 rather than silently applied to the new set.
+
+        Behind the register's read permission — it discloses only the current
+        state of rows the caller can already fetch individually.
+      operationId: assetsBulkPreview
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkPreviewInput'
+      responses:
+        '200':
+          description: The impact statement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkPreview'
+        '400': {description: Validation error}
+        '403': {description: The caller lacks read access, or the session carries no tenant}
+
+  /assets/bulk/delete:
+    post:
+      tags: [Assets]
+      summary: Apply "delete" to many rows, all or none
+      description: >-
+        All-or-nothing (decision D-036): either every named row is changed or
+        none is. One audit entry is written per modified row, carrying the acting
+        user. Rows from another tenant answer 404, identical to fabricated ids.
+
+        The action is fixed by the route, not read from the body, so this
+        endpoint's permission always matches what it performs. Requires
+        `assets:delete`.
+      operationId: assetsBulkDelete
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkApplyInput'
+      responses:
+        '200':
+          description: The batch was applied in full
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkResult'
+        '400': {description: Validation error — empty selection, over 100 items, or an invalid status}
+        '403': {description: The caller lacks assets:delete, or the session carries no tenant}
+        '404': {description: An id did not resolve — absent, or another tenant's, deliberately indistinguishable. Nothing was modified.}
+        '409': {description: The selection changed since it was previewed. Nothing was modified.}
+
 # ==================== COMPONENTS ====================
 components:
   securitySchemes:
@@ -3813,6 +4007,125 @@ components:
             Audit entries written. Below applied only if the trail was
             unavailable; the mutation still happened, and the gap is reported
             rather than hidden.
+
+    BulkCapabilities:
+      type: object
+      properties:
+        entity_type:
+          type: string
+          example: vulnerability
+        actions:
+          type: array
+          description: >-
+            Only the actions this register can actually perform. Assets expose
+            delete alone — domain.Asset has no Status, no Tags, and a free-text
+            Owner, so nothing else from the frozen action set maps onto it.
+          items:
+            type: string
+            enum: [change_status, delete]
+
+    BulkPreviewInput:
+      type: object
+      required: [action, ids]
+      properties:
+        action:
+          type: string
+          enum: [change_status, delete]
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {type: string, format: uuid}
+        status:
+          type: string
+          description: The target value, for change_status.
+
+    BulkApplyInput:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Repeated ids are de-duplicated before the batch runs.
+          items: {type: string, format: uuid}
+        status:
+          type: string
+          description: The target value, for the change-status route.
+        justification:
+          type: string
+          maxLength: 1000
+          description: Recorded on every audit entry the change produces.
+        fingerprint:
+          type: string
+          description: >-
+            The value returned by the preview. When present it must still match
+            the selection's current state, or the request is refused with 409.
+            Omit it to apply without previewing.
+
+    BulkSampleChange:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        label:
+          type: string
+          description: How the row reads to a human — a CVE id, an asset name — never a uuid.
+        before: {type: object, additionalProperties: true}
+        after: {type: object, additionalProperties: true}
+        changed_fields:
+          type: array
+          items: {type: string}
+
+    BulkPreview:
+      type: object
+      properties:
+        requested:
+          type: integer
+          description: How many distinct ids the caller named.
+        found:
+          type: integer
+          description: How many exist in this tenant. A shortfall is what would fail the apply.
+        missing:
+          type: array
+          description: >-
+            Ids that did not resolve — stale selections, or another tenant's,
+            deliberately not distinguished.
+          items: {type: string, format: uuid}
+        affected:
+          type: integer
+          description: >-
+            How many rows the change would actually alter. Lower than `found`
+            when a row already holds the target value.
+        unchanged:
+          type: integer
+        sample:
+          type: array
+          description: A bounded list (10) of exactly what would change.
+          items:
+            $ref: '#/components/schemas/BulkSampleChange'
+        fingerprint:
+          type: string
+          description: Pass to the apply call to detect a selection that moved.
+        action:
+          type: string
+          enum: [change_status, delete]
+
+    BulkResult:
+      type: object
+      properties:
+        total: {type: integer}
+        applied:
+          type: integer
+          description: Equals total on success. A failure is an HTTP error, never a partial number.
+        ids:
+          type: array
+          items: {type: string, format: uuid}
+        audited:
+          type: integer
+          description: >-
+            Audit entries written. Below `applied` only if the trail was
+            unavailable; the mutation still happened and the gap is reported.
 
     ErrorResponse:
       type: object

@@ -1294,6 +1294,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vulnerabilities/bulk/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which bulk actions this register supports
+         * @description A compiled-in vocabulary, identical for every tenant, so the bulk bar never offers an action the server would refuse. No table is read.
+         */
+        get: operations["vulnerabilitiesBulkCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/bulk/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a bulk action would change — mutates nothing
+         * @description Returns the affected count and a bounded sample of exactly what would change, and writes nothing. Also returns a `fingerprint`: send it back with the apply and a selection that moved underneath the user is refused with 409 rather than silently applied to the new set.
+         *     Behind the register's read permission — it discloses only the current state of rows the caller can already fetch individually.
+         */
+        post: operations["vulnerabilitiesBulkPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/bulk/change-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply "change_status" to many rows, all or none
+         * @description All-or-nothing (decision D-036): either every named row is changed or none is. One audit entry is written per modified row, carrying the acting user. Rows from another tenant answer 404, identical to fabricated ids.
+         *     The action is fixed by the route, not read from the body, so this endpoint's permission always matches what it performs. Requires `vulnerabilities:update`.
+         */
+        post: operations["vulnerabilitiesBulkChangeStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/bulk/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply "delete" to many rows, all or none
+         * @description All-or-nothing (decision D-036): either every named row is changed or none is. One audit entry is written per modified row, carrying the acting user. Rows from another tenant answer 404, identical to fabricated ids.
+         *     The action is fixed by the route, not read from the body, so this endpoint's permission always matches what it performs. Requires `vulnerabilities:delete`.
+         */
+        post: operations["vulnerabilitiesBulkDelete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/bulk/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which bulk actions this register supports
+         * @description A compiled-in vocabulary, identical for every tenant, so the bulk bar never offers an action the server would refuse. No table is read.
+         */
+        get: operations["assetsBulkCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/bulk/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a bulk action would change — mutates nothing
+         * @description Returns the affected count and a bounded sample of exactly what would change, and writes nothing. Also returns a `fingerprint`: send it back with the apply and a selection that moved underneath the user is refused with 409 rather than silently applied to the new set.
+         *     Behind the register's read permission — it discloses only the current state of rows the caller can already fetch individually.
+         */
+        post: operations["assetsBulkPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/bulk/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply "delete" to many rows, all or none
+         * @description All-or-nothing (decision D-036): either every named row is changed or none is. One audit entry is written per modified row, carrying the acting user. Rows from another tenant answer 404, identical to fabricated ids.
+         *     The action is fixed by the route, not read from the body, so this endpoint's permission always matches what it performs. Requires `assets:delete`.
+         */
+        post: operations["assetsBulkDelete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2358,6 +2503,67 @@ export interface components {
             risk_ids: string[];
             /** @description Audit entries written. Below applied only if the trail was unavailable; the mutation still happened, and the gap is reported rather than hidden. */
             audited: number;
+        };
+        BulkCapabilities: {
+            /** @example vulnerability */
+            entity_type?: string;
+            /** @description Only the actions this register can actually perform. Assets expose delete alone — domain.Asset has no Status, no Tags, and a free-text Owner, so nothing else from the frozen action set maps onto it. */
+            actions?: ("change_status" | "delete")[];
+        };
+        BulkPreviewInput: {
+            /** @enum {string} */
+            action: "change_status" | "delete";
+            ids: string[];
+            /** @description The target value, for change_status. */
+            status?: string;
+        };
+        BulkApplyInput: {
+            /** @description Repeated ids are de-duplicated before the batch runs. */
+            ids: string[];
+            /** @description The target value, for the change-status route. */
+            status?: string;
+            /** @description Recorded on every audit entry the change produces. */
+            justification?: string;
+            /** @description The value returned by the preview. When present it must still match the selection's current state, or the request is refused with 409. Omit it to apply without previewing. */
+            fingerprint?: string;
+        };
+        BulkSampleChange: {
+            /** Format: uuid */
+            id?: string;
+            /** @description How the row reads to a human — a CVE id, an asset name — never a uuid. */
+            label?: string;
+            before?: {
+                [key: string]: unknown;
+            };
+            after?: {
+                [key: string]: unknown;
+            };
+            changed_fields?: string[];
+        };
+        BulkPreview: {
+            /** @description How many distinct ids the caller named. */
+            requested?: number;
+            /** @description How many exist in this tenant. A shortfall is what would fail the apply. */
+            found?: number;
+            /** @description Ids that did not resolve — stale selections, or another tenant's, deliberately not distinguished. */
+            missing?: string[];
+            /** @description How many rows the change would actually alter. Lower than `found` when a row already holds the target value. */
+            affected?: number;
+            unchanged?: number;
+            /** @description A bounded list (10) of exactly what would change. */
+            sample?: components["schemas"]["BulkSampleChange"][];
+            /** @description Pass to the apply call to detect a selection that moved. */
+            fingerprint?: string;
+            /** @enum {string} */
+            action?: "change_status" | "delete";
+        };
+        BulkResult: {
+            total?: number;
+            /** @description Equals total on success. A failure is an HTTP error, never a partial number. */
+            applied?: number;
+            ids?: string[];
+            /** @description Audit entries written. Below `applied` only if the trail was unavailable; the mutation still happened and the gap is reported. */
+            audited?: number;
         };
         ErrorResponse: {
             /** @example Invalid input */
@@ -4932,6 +5138,292 @@ export interface operations {
             };
             /** @description At least one id could not be resolved — absent, or belonging to another tenant, deliberately indistinguishable. Nothing was modified. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    vulnerabilitiesBulkCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The supported actions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkCapabilities"];
+                };
+            };
+            /** @description The caller lacks read access to this register */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    vulnerabilitiesBulkPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkPreviewInput"];
+            };
+        };
+        responses: {
+            /** @description The impact statement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkPreview"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller lacks read access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    vulnerabilitiesBulkChangeStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkApplyInput"];
+            };
+        };
+        responses: {
+            /** @description The batch was applied in full */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            /** @description Validation error — empty selection */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller lacks vulnerabilities:update */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An id did not resolve — absent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The selection changed since it was previewed. Nothing was modified. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    vulnerabilitiesBulkDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkApplyInput"];
+            };
+        };
+        responses: {
+            /** @description The batch was applied in full */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            /** @description Validation error — empty selection */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller lacks vulnerabilities:delete */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An id did not resolve — absent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The selection changed since it was previewed. Nothing was modified. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assetsBulkCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The supported actions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkCapabilities"];
+                };
+            };
+            /** @description The caller lacks read access to this register */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assetsBulkPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkPreviewInput"];
+            };
+        };
+        responses: {
+            /** @description The impact statement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkPreview"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller lacks read access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assetsBulkDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkApplyInput"];
+            };
+        };
+        responses: {
+            /** @description The batch was applied in full */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            /** @description Validation error — empty selection */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller lacks assets:delete */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An id did not resolve — absent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The selection changed since it was previewed. Nothing was modified. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
