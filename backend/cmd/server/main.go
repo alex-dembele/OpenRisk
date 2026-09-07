@@ -36,6 +36,7 @@ import (
 	appauto "github.com/opendefender/openrisk/internal/application/automation"
 	billingapp "github.com/opendefender/openrisk/internal/application/billing"
 	"github.com/opendefender/openrisk/internal/application/board"
+	bulkapp "github.com/opendefender/openrisk/internal/application/bulk"
 	"github.com/opendefender/openrisk/internal/application/compliance"
 	"github.com/opendefender/openrisk/internal/application/complianceaudit"
 	entapp "github.com/opendefender/openrisk/internal/application/entitlements"
@@ -1785,6 +1786,35 @@ func main() {
 	vulnRead := middleware.RequirePermission("vulnerabilities:read")
 	vulnWrite := middleware.RequirePermission("vulnerabilities:update")
 	vulnDelete := middleware.RequirePermission("vulnerabilities:delete")
+
+	// Governed bulk operations (#582). One engine per register, sharing the
+	// transaction boundary, the all-or-nothing rule and the per-row audit entry
+	// so the guarantee is not re-implemented six times.
+	//
+	// Each ACTION is mounted behind its own permission, and the handler takes the
+	// action from the route rather than the body: one route with one permission
+	// would let a caller holding update rights post {"action":"delete"}.
+	// Criterion 4 is this middleware — UI gating alone does not satisfy it.
+	//
+	// Preview is behind :read. It writes nothing and discloses only the current
+	// state of rows the caller can already fetch individually.
+	vulnBulk := handlers.NewBulkHandler(
+		bulkapp.New(repository.NewVulnerabilityBulkStore(database.DB), auditChainRepo))
+	protected.Get("/vulnerabilities/bulk/capabilities", vulnRead, vulnBulk.Capabilities)
+	protected.Post("/vulnerabilities/bulk/preview", vulnRead, vulnBulk.Preview)
+	protected.Post("/vulnerabilities/bulk/change-status", vulnWrite, vulnBulk.Apply(domain.BulkActionChangeStatus))
+	protected.Post("/vulnerabilities/bulk/delete", vulnDelete, vulnBulk.Apply(domain.BulkActionDelete))
+
+	// The asset inventory supports DELETE only: domain.Asset has no Status, no
+	// Tags, and its Owner is free text, so nothing else from the frozen action
+	// set maps onto it. No change-status route is registered, rather than one
+	// that would answer 400 — the capabilities endpoint tells the UI which
+	// actions exist so it never offers one that cannot work.
+	assetBulk := handlers.NewBulkHandler(
+		bulkapp.New(repository.NewAssetBulkStore(database.DB), auditChainRepo))
+	protected.Get("/assets/bulk/capabilities", assetRead, assetBulk.Capabilities)
+	protected.Post("/assets/bulk/preview", assetRead, assetBulk.Preview)
+	protected.Post("/assets/bulk/delete", assetDelete, assetBulk.Apply(domain.BulkActionDelete))
 
 	// --- Smart Risk Calculation (spec §8 "Calcul de risque intelligent") ---
 	// The multifactor risk score: blends business criticality, internet exposure,

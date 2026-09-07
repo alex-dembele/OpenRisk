@@ -520,6 +520,9 @@ var decisions = []Decision{
 		"repository/gorm_asset_dependency_repository_test TestDepRepo_CreateAndListByTenant_Isolation"},
 	{"/api/v1/attack-surface/topology/edge-types", PublicByDesign,
 		"returns domain.TopologyEdgeTypes, a compiled-in vocabulary of edge kinds. No table is read"},
+	// Same shape as edge-types above: a compiled-in vocabulary, not tenant data.
+	{"/api/v1/assets/bulk/capabilities", PublicByDesign,
+		"returns the register's compiled-in bulk action list (domain.BulkAction values from AssetBulkStore.SupportedBulkActions) so the bulk bar cannot offer an action the server would refuse. No table is read and the answer is identical for every tenant; the route still sits behind assets:read, and BulkHandler.Capabilities refuses a zero tenant. The bulk PREVIEW and APPLY routes on the same prefix do read and write tenant rows, and are covered by application/bulk engine_test TestBulkEngine_CrossTenant_IsIndistinguishableAndModifiesNothing plus repository/gorm_bulk_stores_test TestBulkStores_LoadBulk_OmitsForeignAndAbsentRows, _ApplyBulk_ForeignTenantIsNotFoundAndUntouched and _DeleteBulk_ForeignTenantDeletesNothing"},
 	{"/api/v1/attack-surface/topology", Pending,
 		"assessed, not pinned: GetTopologyUseCase refuses uuid.Nil with ErrForbidden, then builds the graph from assets.List(tenant) and deps.ListByTenant(tenant) — both of which ARE covered by the two tests named on /assets and /asset-dependencies above. Unresolved: the graph is assembled from those two reads plus further sources this sweep did not enumerate, and a node that entered the graph from an unscoped source would not be caught by testing its inputs. Settled by a two-tenant test over GetTopologyUseCase.Execute asserting no foreign node or edge id appears"},
 	{"/api/v1/attack-surface/schemas", Pending,
