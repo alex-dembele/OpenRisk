@@ -433,6 +433,10 @@ func (h *GovernanceHandler) CreateDelegation(c *fiber.Ctx) error {
 		DelegateID:  delegateID,
 		Reason:      body.Reason,
 		Permissions: body.Permissions,
+		// #529 — the route carries no permission guard by design (any member
+		// lends their own rights). Naming somebody ELSE as the delegator is the
+		// privileged case, and the use case refuses it unless this is true.
+		ActorIsAdmin: approverFromCtx(c).IsAdmin,
 	}
 	if body.DelegatorID != "" {
 		did, err := uuid.Parse(body.DelegatorID)
@@ -467,7 +471,10 @@ func (h *GovernanceHandler) RevokeDelegation(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid delegation id"})
 	}
-	d, err := h.revokeDelegation.Execute(govCtx(c), tenantID(c), userID(c), id)
+	d, err := h.revokeDelegation.Execute(govCtx(c), tenantID(c), userID(c), governance.RevokeDelegationInput{
+		ID:           id,
+		ActorIsAdmin: approverFromCtx(c).IsAdmin,
+	})
 	if err != nil {
 		return writeAppError(c, err)
 	}

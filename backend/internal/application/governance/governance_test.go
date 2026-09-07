@@ -266,7 +266,7 @@ func TestRevokeDelegation_Success_NotFound_AlreadyRevoked(t *testing.T) {
 	d := &domain.Delegation{TenantID: tenant, DelegatorID: actor, DelegateID: uuid.New(), Status: domain.DelegationActive, EndsAt: end}
 	_ = repo.Create(context.Background(), d)
 
-	got, err := uc.Execute(context.Background(), tenant, actor, d.ID)
+	got, err := uc.Execute(context.Background(), tenant, actor, RevokeDelegationInput{ID: d.ID})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -274,11 +274,11 @@ func TestRevokeDelegation_Success_NotFound_AlreadyRevoked(t *testing.T) {
 		t.Fatalf("expected revoked, got %+v", got)
 	}
 	// NotFound
-	if _, err := uc.Execute(context.Background(), tenant, actor, uuid.New()); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := uc.Execute(context.Background(), tenant, actor, RevokeDelegationInput{ID: uuid.New(), ActorIsAdmin: true}); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("expected not found, got %v", err)
 	}
 	// Already revoked → validation
-	if _, err := uc.Execute(context.Background(), tenant, actor, d.ID); !errors.Is(err, domain.ErrValidation) {
+	if _, err := uc.Execute(context.Background(), tenant, actor, RevokeDelegationInput{ID: d.ID}); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("expected validation for double revoke, got %v", err)
 	}
 }
@@ -535,4 +535,123 @@ func TestAuditRecorder_NilSafe(t *testing.T) {
 	NewAuditRecorder(nil).Record(context.Background(), domain.AuditEvent{TenantID: uuid.New()})
 	// Zero tenant is dropped.
 	NewAuditRecorder(&fakeAuditRepo{}).Record(context.Background(), domain.AuditEvent{})
+}
+
+// ---------------------------------------------------------------------------
+// #529 — delegation authority.
+//
+// POST /governance/delegations carries no route guard on purpose: lending your
+// own rights while you are away is every member's business. What was missing is
+// the check that the rights being lent are YOURS. Without it, any authenticated
+// member could post {delegator_id: <an admin>, delegate_id: <themselves>,
+// permissions: ["*"]} and DecideApproval would then layer the admin's roles
+// onto them (resolveApprover → domain.CanSign) — a maker-checker bypass by
+// anyone who can log in.
+// ---------------------------------------------------------------------------
+
+func TestCreateDelegation_Unauthorized_ForeignDelegator(t *testing.T) {
+	repo := newFakeDelegationRepo()
+	uc := NewCreateDelegationUseCase(repo)
+	tenant, attacker, victim := uuid.New(), uuid.New(), uuid.New()
+	end := time.Now().Add(24 * time.Hour)
+
+	_, err := uc.Execute(context.Background(), tenant, attacker, CreateDelegationInput{
+		DelegatorID: victim, // somebody else's authority
+		DelegateID:  attacker,
+		Permissions: []string{"*"},
+		EndsAt:      &end,
+	})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected forbidden when naming another delegator, got %v", err)
+	}
+	if len(repo.items) != 0 {
+		t.Fatalf("a refused delegation must not be persisted, found %d", len(repo.items))
+	}
+}
+
+func TestCreateDelegation_AdminMayActForAnother(t *testing.T) {
+	repo := newFakeDelegationRepo()
+	uc := NewCreateDelegationUseCase(repo)
+	tenant, admin, absent, cover := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	end := time.Now().Add(24 * time.Hour)
+
+	d, err := uc.Execute(context.Background(), tenant, admin, CreateDelegationInput{
+		DelegatorID:  absent,
+		DelegateID:   cover,
+		Permissions:  []string{"risks:update"},
+		EndsAt:       &end,
+		ActorIsAdmin: true,
+	})
+	if err != nil {
+		t.Fatalf("an org admin may record a delegation for a colleague: %v", err)
+	}
+	if d.DelegatorID != absent || d.CreatedBy != admin {
+		t.Fatalf("delegator must be the named user and CreatedBy the admin, got %+v", d)
+	}
+}
+
+func TestCreateDelegation_OwnRightsNeedNoAdmin(t *testing.T) {
+	repo := newFakeDelegationRepo()
+	uc := NewCreateDelegationUseCase(repo)
+	tenant, actor := uuid.New(), uuid.New()
+	end := time.Now().Add(24 * time.Hour)
+
+	// Both spellings of "my own rights": the field omitted, and the field set to
+	// the caller. Neither may require admin, or the feature is unusable.
+	if _, err := uc.Execute(context.Background(), tenant, actor, CreateDelegationInput{
+		DelegateID: uuid.New(), Permissions: []string{"risks:read"}, EndsAt: &end,
+	}); err != nil {
+		t.Fatalf("implicit self-delegation must be allowed: %v", err)
+	}
+	if _, err := uc.Execute(context.Background(), tenant, actor, CreateDelegationInput{
+		DelegatorID: actor, DelegateID: uuid.New(), Permissions: []string{"risks:read"}, EndsAt: &end,
+	}); err != nil {
+		t.Fatalf("explicit self-delegation must be allowed: %v", err)
+	}
+}
+
+func TestRevokeDelegation_Unauthorized_Bystander(t *testing.T) {
+	repo := newFakeDelegationRepo()
+	uc := NewRevokeDelegationUseCase(repo)
+	tenant := uuid.New()
+	delegator, delegate, bystander := uuid.New(), uuid.New(), uuid.New()
+	end := time.Now().Add(24 * time.Hour)
+
+	newRow := func() *domain.Delegation {
+		d := &domain.Delegation{
+			TenantID: tenant, DelegatorID: delegator, DelegateID: delegate,
+			Status: domain.DelegationActive, EndsAt: end,
+		}
+		_ = repo.Create(context.Background(), d)
+		return d
+	}
+
+	// An unrelated member of the same tenant may not end the grant.
+	d := newRow()
+	if _, err := uc.Execute(context.Background(), tenant, bystander, RevokeDelegationInput{ID: d.ID}); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected forbidden for a bystander, got %v", err)
+	}
+	if got, _ := repo.GetByID(context.Background(), d.ID, tenant); got.Status != domain.DelegationActive {
+		t.Fatalf("a refused revoke must leave the row active, got %s", got.Status)
+	}
+
+	// The three parties who may: delegator, delegate, org admin.
+	for name, call := range map[string]func() error{
+		"delegator": func() error {
+			_, err := uc.Execute(context.Background(), tenant, delegator, RevokeDelegationInput{ID: newRow().ID})
+			return err
+		},
+		"delegate": func() error {
+			_, err := uc.Execute(context.Background(), tenant, delegate, RevokeDelegationInput{ID: newRow().ID})
+			return err
+		},
+		"admin": func() error {
+			_, err := uc.Execute(context.Background(), tenant, bystander, RevokeDelegationInput{ID: newRow().ID, ActorIsAdmin: true})
+			return err
+		},
+	} {
+		if err := call(); err != nil {
+			t.Fatalf("%s must be able to revoke: %v", name, err)
+		}
+	}
 }
