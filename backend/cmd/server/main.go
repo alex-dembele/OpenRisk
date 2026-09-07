@@ -1130,13 +1130,17 @@ func main() {
 
 	// The entitlements snapshot drives the whole paywall UX and the current
 	// subscription is read by every member — the session alone authorises those.
-	// Every verb that MOVES the tenant onto a different plan is admin-only:
-	// starting a trial burns the organisation's one trial window and checkout
-	// opens a payment session in its name, which is the same class of act as
-	// change-plan and cancel, not "self-service" (#529).
+	//
+	// The line between the two POSTs is D-034, and it is not where the #529 audit
+	// first drew it. Checkout opens a hosted payment session in the ORGANISATION's
+	// name, so it sits with change-plan and cancel behind the admin role. Starting
+	// a trial does not spend anything and sits on the activation path, where
+	// friction is the expensive thing — so it stays open to any member. Its
+	// missing guard is therefore deliberate, not an omission, which is why it is
+	// still listed in routesWithoutPermissionGuard.
 	protected.Get("/entitlements", entitlementHandler.GetEntitlements)
 	protected.Get("/billing", billingHandler.GetBilling)
-	protected.Post("/billing/trial", middleware.RequireRole("admin", "root"), billingHandler.StartTrial)
+	protected.Post("/billing/trial", billingHandler.StartTrial)
 	protected.Post("/billing/checkout", middleware.RequireRole("admin", "root"), billingHandler.Checkout)
 	protected.Post("/billing/change-plan", middleware.RequireRole("admin", "root"), billingHandler.ChangePlan)
 	protected.Post("/billing/cancel", middleware.RequireRole("admin", "root"), billingHandler.Cancel)

@@ -61,8 +61,6 @@ func newlyGuardedRoutes() []newlyGuardedRoute {
 	riskRead := func() fiber.Handler { return middleware.RequirePermission("risks:read") }
 
 	rows := []newlyGuardedRoute{
-		{"Post", "/billing/trial", `middleware.RequireRole("admin", "root")`, "", adminGuard(),
-			"starting the trial burns the organisation's one trial window"},
 		{"Post", "/billing/checkout", `middleware.RequireRole("admin", "root")`, "", adminGuard(),
 			"opens a payment session in the organisation's name"},
 		{"Post", "/integrations/:id/test", `middleware.RequireRole("admin", "root")`, "", adminGuard(),
