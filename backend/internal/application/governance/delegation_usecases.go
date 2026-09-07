@@ -26,6 +26,9 @@ type CreateDelegationInput struct {
 	Permissions []string // subset of the delegator's rights, or ["*"]
 	StartsAt    *time.Time
 	EndsAt      *time.Time
+	// ActorIsAdmin says whether the caller administers the organisation. Only an
+	// admin may record a delegation on somebody ELSE's behalf; see Execute.
+	ActorIsAdmin bool
 }
 
 type CreateDelegationUseCase struct {
@@ -54,6 +57,15 @@ func (uc *CreateDelegationUseCase) Execute(ctx context.Context, tenantID, actorI
 	}
 	if delegator == uuid.Nil {
 		return nil, domain.NewValidationError("delegator is required")
+	}
+	// #529 — a delegation is a grant of the DELEGATOR's authority, and
+	// DecideApproval layers the delegator's roles onto whoever holds it
+	// (resolveApprover → domain.CanSign). Letting a caller name an arbitrary
+	// delegator therefore lets any member mint themselves an admin's signature
+	// on a maker-checker request. You lend your own rights; an org admin may
+	// record a delegation for someone else (the "they left, reassign it" case).
+	if delegator != actorID && !in.ActorIsAdmin {
+		return nil, domain.NewForbiddenError("only an organization admin may create a delegation on another member's behalf")
 	}
 	if in.DelegateID == uuid.Nil {
 		return nil, domain.NewValidationError("delegate is required")
@@ -163,13 +175,27 @@ func (uc *RevokeDelegationUseCase) WithRecorder(r *AuditRecorder) *RevokeDelegat
 	return uc
 }
 
-func (uc *RevokeDelegationUseCase) Execute(ctx context.Context, tenantID, actorID, id uuid.UUID) (*domain.Delegation, error) {
+// RevokeDelegationInput names the delegation and carries the caller's standing,
+// so the use case can decide whether they may end this grant.
+type RevokeDelegationInput struct {
+	ID           uuid.UUID
+	ActorIsAdmin bool
+}
+
+func (uc *RevokeDelegationUseCase) Execute(ctx context.Context, tenantID, actorID uuid.UUID, in RevokeDelegationInput) (*domain.Delegation, error) {
+	id := in.ID
 	d, err := uc.repo.GetByID(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	if d == nil {
 		return nil, domain.NewNotFoundError("delegation", id)
+	}
+	// #529 — revocation ends somebody's standing authority. The two parties to
+	// the grant may end it, and so may an org admin; an unrelated member may
+	// not, or the approval inbox becomes deniable by anyone who can log in.
+	if d.DelegatorID != actorID && d.DelegateID != actorID && !in.ActorIsAdmin {
+		return nil, domain.NewForbiddenError("only the delegator, the delegate or an organization admin may revoke this delegation")
 	}
 	if d.Status == domain.DelegationRevoked {
 		return nil, domain.NewValidationError("delegation is already revoked")

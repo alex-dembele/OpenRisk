@@ -26,6 +26,16 @@ func NewBulkOperationHandler() *BulkOperationHandler {
 	}
 }
 
+// bulkOperationPermission maps each bulk verb to the permission its per-entity
+// equivalent requires, so a bulk job can never be a cheaper route to a
+// mutation than doing it one record at a time.
+var bulkOperationPermission = map[domain.BulkOperationType]string{
+	domain.BulkOperationTypeUpdate: "risks:update",
+	domain.BulkOperationTypeDelete: "risks:delete",
+	domain.BulkOperationTypeExport: "risks:read",
+	domain.BulkOperationTypeAssign: "mitigations:update",
+}
+
 // CreateBulkOperation handles POST /bulk-operations
 // Creates a new bulk operation job
 func (h *BulkOperationHandler) CreateBulkOperation(c *fiber.Ctx) error {
@@ -48,6 +58,25 @@ func (h *BulkOperationHandler) CreateBulkOperation(c *fiber.Ctx) error {
 	if req.OperationType == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Missing required field: operation_type",
+		})
+	}
+
+	// #529 — a bulk job is the same mutation as the single-entity route, applied
+	// N times: `delete` with an empty filter removes every risk in the tenant.
+	// The route's middleware guard cannot tell which, because the verb is in the
+	// BODY, so the exact permission is checked here. Without this, any
+	// authenticated member — a Viewer included — could empty the register while
+	// DELETE /risks/:id demands risks:delete.
+	perm, known := bulkOperationPermission[req.OperationType]
+	if !known {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid operation type: " + string(req.OperationType),
+		})
+	}
+	if !userClaims.HasPermission(perm) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"code":    "FORBIDDEN",
+			"message": "Missing required permission: " + perm,
 		})
 	}
 
