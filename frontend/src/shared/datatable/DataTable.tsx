@@ -43,6 +43,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import { useI18n } from '../../hooks/useI18n';
 import { useUIStore } from '../../store/uiStore';
 import { EmptyState } from '../EmptyState';
 import { SkeletonRows } from '../ui';
@@ -108,6 +109,7 @@ export interface DataTableProps<T> {
 function useLabels() {
   const lang = useUIStore((s) => s.lang);
   const fr = lang === 'fr';
+  const { t } = useI18n();
   return useMemo(
     () => ({
       search: fr ? 'Rechercher…' : 'Search…',
@@ -118,6 +120,23 @@ function useLabels() {
         fr ? `${n} résultat${n > 1 ? 's' : ''}` : `${n} result${n > 1 ? 's' : ''}`,
       reset: fr ? 'Réinitialiser' : 'Reset',
       savedViews: fr ? 'Filtres sauvegardés' : 'Saved filters',
+      // #580's strings live in /src/locales rather than inline, so FR/EN parity
+      // is checkable by the i18n steward instead of by reading JSX.
+      saved: {
+        error: t('savedViews.error'),
+        retry: t('savedViews.retry'),
+        empty: t('savedViews.empty'),
+        emptyHint: t('savedViews.emptyHint'),
+        share: t('savedViews.share'),
+        sharedBadge: t('savedViews.sharedBadge'),
+        sharedBy: t('savedViews.sharedBy'),
+        makeShared: t('savedViews.makeShared'),
+        makePersonal: t('savedViews.makePersonal'),
+        mutationError: t('savedViews.mutationError'),
+        nameRequired: t('savedViews.nameRequired'),
+        nameTooLong: t('savedViews.nameTooLong'),
+        nameUnreadable: t('savedViews.nameUnreadable'),
+      },
       saveCurrent: fr
         ? 'Appliquez un filtre pour pouvoir le sauvegarder.'
         : 'Apply a filter to be able to save it.',
@@ -162,7 +181,7 @@ function useLabels() {
       retry: fr ? 'Réessayer' : 'Retry',
       loading: fr ? 'Chargement…' : 'Loading…',
     }),
-    [fr],
+    [fr, t],
   );
 }
 
@@ -220,7 +239,9 @@ export function DataTable<T>({
   );
 
   /* ------------------------------------------------------------- saved views */
-  const { views, save: saveView, remove: removeView } = useSavedViews(id);
+  // Server-side since #580. Fetched independently of the rows on purpose: a
+  // saved-views outage must never keep the register off the screen.
+  const savedViews = useSavedViews(id);
 
   /* ---------------------------------------------------------- client shaping */
   // In server mode the API already did all of this; `rows` is the page.
@@ -516,9 +537,14 @@ export function DataTable<T>({
           facets={facets}
           api={api}
           resultCount={resultCount}
-          views={views}
-          onSaveView={saveView}
-          onDeleteView={removeView}
+          views={savedViews.views}
+          viewsStatus={savedViews.status}
+          viewsMutationError={savedViews.mutationError}
+          canEditOthersViews={savedViews.canEditOthers}
+          onSaveView={savedViews.save}
+          onDeleteView={savedViews.remove}
+          onSetViewVisibility={savedViews.setVisibility}
+          onRetryViews={savedViews.retry}
           labels={L}
         />
       )}
