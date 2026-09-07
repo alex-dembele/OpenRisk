@@ -457,6 +457,59 @@ financière + un plan de traitement suggéré ». Une branche par phase, commits
 11. **Billing & Plans (17.2)** + conversion (Partie C) + **Onboarding (17.6)** + **Super Admin (17.4)**.
 
 **Bloc W1 — Wave 1, fondations produit**
+- [x] **W1-05b — Actions en masse du registre : transactionnelles, auditées, complètes** (#581,
+  enfant B de l'épique #235, débloqué par **D-036**).
+  `POST /api/v1/risks/bulk` appliquait ce qu'il pouvait, item par item, sans transaction, et
+  renvoyait un décompte — alors que ses propres commentaires promettaient l'atomicité
+  (*"MANDATORY: All operations must be atomic within a transaction"*, *"all succeed or all
+  fail"*). Les commentaires décrivaient une garantie que le code n'avait pas : exactement ce
+  qu'un relecteur ou un agent peut reporter comme capacité (RÈGLE ABSOLUE 12).
+  **Corrigé** : `domain.RiskRepository.BulkApply` charge, mute et enregistre tout le lot dans
+  **une seule transaction** (`gorm_risk_repository.go`, verrou `FOR UPDATE` hors SQLite) ; un
+  seul id périmé, fabriqué ou appartenant à un autre tenant fait échouer le lot entier sans rien
+  écrire. `BulkDelete` devient **strict** : un décompte court annule la suppression au lieu de
+  supprimer le reste. `remove_tags`, déclaré mais jamais traité — il tombait dans le `default` et
+  répondait *"unknown action type: remove_tags"* — est implémenté ; retirer un tag absent est un
+  no-op, pas une erreur. Les tags sont désormais **triés** et non plus issus d'un parcours de map
+  (ordre aléatoire à chaque écriture). Le changement de statut passe par `Risk.SetState`, seule
+  voie supportée, au lieu d'écrire `Status` à la main.
+  **Audit** : `performedBy` était accepté par les quatre helpers et lu par aucun — un superviseur
+  demandant « qui a réassigné ces risques » n'avait pas de réponse. Une entrée
+  `domain.AuditEvent` est maintenant écrite **par risque modifié**, avec l'acteur, le before →
+  after et les champs réellement changés, dans le journal chaîné et scellé. Le journal est un
+  argument **obligatoire** du constructeur, pas un `WithX` optionnel. `Risk` n'est
+  volontairement pas rendu `Auditable` (chemin chaud du Score Engine, cf.
+  `governance_auditable.go:13`) : c'est la voie « Recorder explicite » que le plugin documente.
+  **Contrat (rupture assumée, D-036)** : `{Success, Failed, Errors, UpdatedRisks}` devient
+  `{total, applied, risk_ids, audited}`. Sous l'atomicité, `Failed` ne pourrait valoir que 0 ou
+  tout.
+  **L'endpoint n'était pas atteignable.** Il n'était monté que dans le `RegisterRoutes` de
+  `internal/api/http/handlers`, package que rien n'importe et dont la fonction n'est jamais
+  appelée (déjà noté dans `gorm_risk_repository.go:638`) ; côté front, `riskService.bulkAction`
+  n'était appelé par aucun composant et sa forme de requête (`action` + `payload` imbriqué) ne
+  correspondait pas non plus à l'API (`type` + paramètres à plat). Le préjudice décrit par #581
+  ne pouvait donc pas se produire : les défauts étaient réels, l'impact utilisateur non. La route
+  est désormais montée derrière `risks:update`, ce qui rend les critères 4 et 8 testables.
+  **Tests** : `bulk_action_test.go` créé (15 tests — succès, not-found, unauthorized, rollback,
+  audit, `remove_tags`, cross-tenant, les deux garde-fous de volume, et une épingle qui échoue si
+  les commentaires réaffirment l'atomicité sans le mécanisme) et
+  `gorm_risk_bulk_test.go` (7 tests SQLite prouvant le ROLLBACK réel — ce qu'un dépôt bouchonné
+  ne peut pas montrer).
+  **Reste à faire**
+  - Ligne dans `docs/MARKETING_CLAIM_MATRIX.md` : **non ajoutée**, statut `VERIFIED` réservé à
+    `product-verifier` via `/verify-claims`.
+  - Aucune exécution contre un backend vivant : les tests dépôt tournent sur SQLite en mémoire,
+    et la route n'a pas été appelée sur un PostgreSQL réel.
+  - Aucune UI n'appelle encore l'endpoint : le registre n'expose qu'une action « supprimer » qui
+    boucle sur l'API par id. Brancher l'UI sur `/risks/bulk` n'était pas dans le périmètre.
+  - `Risk.AfterSave` continue d'écrire `risk_histories` avec `ChangedBy = CreatedBy`, c'est-à-dire
+    le **créateur** du risque et non l'acteur du changement. Hors périmètre (le hook concerne
+    toutes les écritures de risque), mais c'est la même classe de défaut d'attribution que le
+    critère 2 ; à traiter à part.
+  - Le registre d'isolation n'a pas de case pour une mutation adressée par le **corps** de la
+    requête : `TestNoStaleDecisions` n'accepte que les routes paramétrées et les lectures de
+    collection. C'est l'angle mort que le commentaire du paquet décrit lui-même ; la sonde
+    manuelle qu'il réclame existe (les deux tests cross-tenant), mais elle n'est pas enregistrée.
 - [x] **W1-03 — Action Center contextuel** (épique #201, scindée en #429 backend / #430 frontend).
   **Backend livré** (#429, branche `429-feat-build-the-action-center-aggregation-api-backend`) :
   `GET /api/v1/action-center` — agrégation **en lecture seule** de six sources existantes (mitigation en
