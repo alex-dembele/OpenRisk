@@ -231,8 +231,26 @@ var decisions = []Decision{
 		"approve/pdf subpaths lack cross-tenant assertions"},
 	{"/api/v1/ai/*", Pending,
 		"AI use cases read through tenant-scoped repos; no cross-tenant assertion on the id paths"},
-	{"/api/v1/audit-logs/*", Pending,
-		"admin-only; tenant scoping not pinned by a test"},
+	// All three /audit-logs routes — the collection read and its two
+	// parameterised siblings — leaked every tenant's authentication log until
+	// #532. The entry that used to sit here said "admin-only; tenant scoping not
+	// pinned by a test", which was true and was read as reassuring: there was no
+	// tenant scoping to pin, because audit_logs had no tenant column. "Not
+	// pinned by a test" and "does not exist" are not the same sentence, and the
+	// registry could not tell them apart until somebody read the query.
+	{"/api/v1/audit-logs/*", Covered,
+		"service/audit_log_isolation_test TestAuditLogs_ReadsNeverCrossTenants pins all four reads " +
+			"(date range, user, action, IP) against a fixture holding two organisations, with the SAME " +
+			"actor id and the SAME action in both — so a predicate on user_id or on action, which is what " +
+			"these queries had, separates nothing; handler/audit_log_isolation_test " +
+			"TestAuditLogRoutes_AdminOfOneOrganisationSeesOnlyItsOwn drives all three routes over the real " +
+			"HTTP stack as an administrator of one organisation and asserts the other's events are absent, " +
+			"with the mirror case asserted too so a handler that returned nothing could not pass. " +
+			"TestAuditLogRoutes_SessionWithNoOrganisationIsRefused covers the zero-tenant session (401, not " +
+			"a global read), and TestAuditLogs_UnattributedEventsAreInvisibleToEveryTenant covers the " +
+			"pre-authentication rows that carry no organisation: tenant_id is NULL, `tenant_id = ?` never " +
+			"matches NULL, so they are invisible to every tenant rather than visible to all. Validated by " +
+			"sabotage — the predicate was removed from each query and every one of these failed"},
 	{"/api/v1/rbac/*", Pending,
 		"admin-only tenant/user/role admin paths; GetTenantUsers gates on level, not pinned"},
 	{"/api/v1/tokens/*", Pending,

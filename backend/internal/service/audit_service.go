@@ -6,26 +6,65 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/opendefender/openrisk/internal/domain"
 	"github.com/opendefender/openrisk/internal/infrastructure/database"
 )
 
-// AuditService handles logging of authentication and authorization events
-type AuditService struct{}
+// AuditService handles logging of authentication and authorization events.
+//
+// TENANCY (#532). Every write takes the acting session's organisation and every
+// read filters on it. Before 2026-09-04 neither did: the table had no tenant
+// column, and GET /api/v1/audit-logs returned every tenant's log to any
+// organisation administrator.
+//
+// The tenant is a PARAMETER on every method rather than something read from a
+// context inside, so adding a caller is a compile error until that caller has
+// said which organisation it is acting for. A tenant that can be forgotten is a
+// tenant that will be.
+type AuditService struct {
+	// db defaults to the package-global handle. It is a field so tests can drive
+	// the real methods against a fixture instead of asserting against a retyped
+	// copy of their SQL.
+	db *gorm.DB
+}
 
-// NewAuditService creates a new audit service
+// NewAuditService creates a new audit service bound to the process-wide handle.
 func NewAuditService() *AuditService {
 	return &AuditService{}
 }
 
+// NewAuditServiceWithDB binds the service to an explicit handle. For tests.
+func NewAuditServiceWithDB(db *gorm.DB) *AuditService {
+	return &AuditService{db: db}
+}
+
+func (s *AuditService) handle() *gorm.DB {
+	if s.db != nil {
+		return s.db
+	}
+	return database.DB
+}
+
+// errNoTenant is returned by every read below when no organisation resolves.
+//
+// It refuses rather than emitting `tenant_id = '00000000-...'` and returning an
+// empty page. Both are safe; only one is honest. An empty page reads as "this
+// organisation has no audit history", which is a different statement from "this
+// request carried no organisation", and a caller cannot tell them apart.
+var errNoTenant = errors.New("audit: an organisation is required to read the audit trail")
+
 // LogLogin logs a user login attempt
-func (s *AuditService) LogLogin(userID uuid.UUID, result domain.AuditLogResult, ipAddress string, userAgent string, errorMsg string) error {
+func (s *AuditService) LogLogin(tenantID *uuid.UUID, userID uuid.UUID, result domain.AuditLogResult, ipAddress string, userAgent string, errorMsg string) error {
 	return s.LogAction(&domain.AuditLog{
+		TenantID:     tenantID,
 		UserID:       &userID,
 		Action:       domain.ActionLogin,
 		Resource:     domain.ResourceAuth,
@@ -38,8 +77,9 @@ func (s *AuditService) LogLogin(userID uuid.UUID, result domain.AuditLogResult, 
 }
 
 // LogRegister logs a user registration attempt
-func (s *AuditService) LogRegister(userID *uuid.UUID, result domain.AuditLogResult, ipAddress string, userAgent string, errorMsg string) error {
+func (s *AuditService) LogRegister(tenantID *uuid.UUID, userID *uuid.UUID, result domain.AuditLogResult, ipAddress string, userAgent string, errorMsg string) error {
 	return s.LogAction(&domain.AuditLog{
+		TenantID:     tenantID,
 		UserID:       userID,
 		Action:       domain.ActionRegister,
 		Resource:     domain.ResourceAuth,
@@ -52,8 +92,9 @@ func (s *AuditService) LogRegister(userID *uuid.UUID, result domain.AuditLogResu
 }
 
 // LogLogout logs a user logout
-func (s *AuditService) LogLogout(userID uuid.UUID, ipAddress string, userAgent string) error {
+func (s *AuditService) LogLogout(tenantID *uuid.UUID, userID uuid.UUID, ipAddress string, userAgent string) error {
 	return s.LogAction(&domain.AuditLog{
+		TenantID:  tenantID,
 		UserID:    &userID,
 		Action:    domain.ActionLogout,
 		Resource:  domain.ResourceAuth,
@@ -65,8 +106,9 @@ func (s *AuditService) LogLogout(userID uuid.UUID, ipAddress string, userAgent s
 }
 
 // LogTokenRefresh logs a token refresh attempt
-func (s *AuditService) LogTokenRefresh(userID uuid.UUID, result domain.AuditLogResult, ipAddress string, userAgent string, errorMsg string) error {
+func (s *AuditService) LogTokenRefresh(tenantID *uuid.UUID, userID uuid.UUID, result domain.AuditLogResult, ipAddress string, userAgent string, errorMsg string) error {
 	return s.LogAction(&domain.AuditLog{
+		TenantID:     tenantID,
 		UserID:       &userID,
 		Action:       domain.ActionTokenRefresh,
 		Resource:     domain.ResourceAuth,
@@ -79,9 +121,10 @@ func (s *AuditService) LogTokenRefresh(userID uuid.UUID, result domain.AuditLogR
 }
 
 // LogRoleChange logs a user role change
-func (s *AuditService) LogRoleChange(performedByID uuid.UUID, targetUserID uuid.UUID, oldRole string, newRole string, ipAddress string, userAgent string) error {
+func (s *AuditService) LogRoleChange(tenantID *uuid.UUID, performedByID uuid.UUID, targetUserID uuid.UUID, oldRole string, newRole string, ipAddress string, userAgent string) error {
 	errorMsg := fmt.Sprintf("Role changed from %s to %s", oldRole, newRole)
 	return s.LogAction(&domain.AuditLog{
+		TenantID:     tenantID,
 		UserID:       &performedByID,
 		Action:       domain.ActionRoleChange,
 		Resource:     domain.ResourceUser,
@@ -95,8 +138,9 @@ func (s *AuditService) LogRoleChange(performedByID uuid.UUID, targetUserID uuid.
 }
 
 // LogUserDeactivate logs a user deactivation
-func (s *AuditService) LogUserDeactivate(performedByID uuid.UUID, targetUserID uuid.UUID, ipAddress string, userAgent string) error {
+func (s *AuditService) LogUserDeactivate(tenantID *uuid.UUID, performedByID uuid.UUID, targetUserID uuid.UUID, ipAddress string, userAgent string) error {
 	return s.LogAction(&domain.AuditLog{
+		TenantID:   tenantID,
 		UserID:     &performedByID,
 		Action:     domain.ActionUserDeactivate,
 		Resource:   domain.ResourceUser,
@@ -109,8 +153,9 @@ func (s *AuditService) LogUserDeactivate(performedByID uuid.UUID, targetUserID u
 }
 
 // LogUserActivate logs a user activation
-func (s *AuditService) LogUserActivate(performedByID uuid.UUID, targetUserID uuid.UUID, ipAddress string, userAgent string) error {
+func (s *AuditService) LogUserActivate(tenantID *uuid.UUID, performedByID uuid.UUID, targetUserID uuid.UUID, ipAddress string, userAgent string) error {
 	return s.LogAction(&domain.AuditLog{
+		TenantID:   tenantID,
 		UserID:     &performedByID,
 		Action:     domain.ActionUserActivate,
 		Resource:   domain.ResourceUser,
@@ -123,8 +168,9 @@ func (s *AuditService) LogUserActivate(performedByID uuid.UUID, targetUserID uui
 }
 
 // LogUserDelete logs a user deletion
-func (s *AuditService) LogUserDelete(performedByID uuid.UUID, targetUserID uuid.UUID, ipAddress string, userAgent string) error {
+func (s *AuditService) LogUserDelete(tenantID *uuid.UUID, performedByID uuid.UUID, targetUserID uuid.UUID, ipAddress string, userAgent string) error {
 	return s.LogAction(&domain.AuditLog{
+		TenantID:   tenantID,
 		UserID:     &performedByID,
 		Action:     domain.ActionUserDelete,
 		Resource:   domain.ResourceUser,
@@ -136,10 +182,23 @@ func (s *AuditService) LogUserDelete(performedByID uuid.UUID, targetUserID uuid.
 	})
 }
 
-// LogAction logs a generic audit action
+// LogAction logs a generic audit action.
+//
+// log.TenantID is the caller's responsibility and is deliberately not defaulted
+// here. A default would have to be either the zero UUID (a value no organisation
+// has, so the row would be silently unreadable) or something guessed from
+// ambient state (an attribution presented as a fact). Leaving it explicit means
+// a NULL in this column always records a real judgement — "no organisation could
+// be resolved for this event" — rather than an omission.
 func (s *AuditService) LogAction(log *domain.AuditLog) error {
 	if log == nil {
 		return fmt.Errorf("audit log cannot be nil")
+	}
+	// The zero UUID is not an organisation. Accepting it would write a row that
+	// no tenant can ever read while looking, in the column, exactly like a real
+	// attribution. NULL says the same thing honestly.
+	if log.TenantID != nil && *log.TenantID == uuid.Nil {
+		log.TenantID = nil
 	}
 
 	// Set timestamp if not already set
@@ -153,17 +212,24 @@ func (s *AuditService) LogAction(log *domain.AuditLog) error {
 	}
 
 	// Insert into database
-	if err := database.DB.Create(log).Error; err != nil {
+	if err := s.handle().Create(log).Error; err != nil {
 		return fmt.Errorf("failed to log audit action: %w", err)
 	}
 
 	return nil
 }
 
-// GetAuditLogsByUser retrieves all audit logs for a specific user
-func (s *AuditService) GetAuditLogsByUser(userID uuid.UUID, limit int, offset int) ([]domain.AuditLog, error) {
+// GetAuditLogsByUser retrieves one organisation's audit logs for a specific user.
+//
+// The tenant predicate comes FIRST and is not optional. Filtering on user_id
+// alone let an administrator name any user id in the deployment and read that
+// person's history, whichever organisation they belong to.
+func (s *AuditService) GetAuditLogsByUser(tenantID uuid.UUID, userID uuid.UUID, limit int, offset int) ([]domain.AuditLog, error) {
+	if tenantID == uuid.Nil {
+		return nil, errNoTenant
+	}
 	var logs []domain.AuditLog
-	query := database.DB.Where("user_id = ?", userID).
+	query := s.handle().Where("tenant_id = ? AND user_id = ?", tenantID, userID).
 		Order("timestamp DESC").
 		Limit(limit).
 		Offset(offset)
@@ -175,10 +241,17 @@ func (s *AuditService) GetAuditLogsByUser(userID uuid.UUID, limit int, offset in
 	return logs, nil
 }
 
-// GetAuditLogsByAction retrieves all audit logs for a specific action
-func (s *AuditService) GetAuditLogsByAction(action domain.AuditLogAction, limit int, offset int) ([]domain.AuditLog, error) {
+// GetAuditLogsByAction retrieves one organisation's audit logs for an action.
+//
+// This was the sharpest of the three reads: an attacker-chosen action name
+// returned every tenant's events of that kind, most recent first — `login_failed`
+// across the whole deployment, for instance.
+func (s *AuditService) GetAuditLogsByAction(tenantID uuid.UUID, action domain.AuditLogAction, limit int, offset int) ([]domain.AuditLog, error) {
+	if tenantID == uuid.Nil {
+		return nil, errNoTenant
+	}
 	var logs []domain.AuditLog
-	query := database.DB.Where("action = ?", action.String()).
+	query := s.handle().Where("tenant_id = ? AND action = ?", tenantID, action.String()).
 		Order("timestamp DESC").
 		Limit(limit).
 		Offset(offset)
@@ -190,10 +263,18 @@ func (s *AuditService) GetAuditLogsByAction(action domain.AuditLogAction, limit 
 	return logs, nil
 }
 
-// GetAuditLogsByIPAddress retrieves all audit logs from a specific IP address
-func (s *AuditService) GetAuditLogsByIPAddress(ipAddress string, limit int, offset int) ([]domain.AuditLog, error) {
+// GetAuditLogsByIPAddress retrieves one organisation's audit logs from an IP.
+//
+// No route reaches this today, and it is scoped anyway: an unscoped IP lookup is
+// a cross-tenant correlation tool — "which other organisations does this address
+// touch" — and leaving it unscoped because nothing calls it yet is how the next
+// route inherits the defect.
+func (s *AuditService) GetAuditLogsByIPAddress(tenantID uuid.UUID, ipAddress string, limit int, offset int) ([]domain.AuditLog, error) {
+	if tenantID == uuid.Nil {
+		return nil, errNoTenant
+	}
 	var logs []domain.AuditLog
-	query := database.DB.Where("ip_address = ?::inet", ipAddress).
+	query := s.handle().Where("tenant_id = ? AND ip_address = ?::inet", tenantID, ipAddress).
 		Order("timestamp DESC").
 		Limit(limit).
 		Offset(offset)
@@ -205,10 +286,16 @@ func (s *AuditService) GetAuditLogsByIPAddress(ipAddress string, limit int, offs
 	return logs, nil
 }
 
-// GetAuditLogsByDateRange retrieves all audit logs within a date range
-func (s *AuditService) GetAuditLogsByDateRange(startTime time.Time, endTime time.Time, limit int, offset int) ([]domain.AuditLog, error) {
+// GetAuditLogsByDateRange retrieves one organisation's audit logs in a window.
+//
+// This is what GET /api/v1/audit-logs calls. It filtered on the timestamp alone,
+// so the page an administrator opened carried every tenant's rows (#532).
+func (s *AuditService) GetAuditLogsByDateRange(tenantID uuid.UUID, startTime time.Time, endTime time.Time, limit int, offset int) ([]domain.AuditLog, error) {
+	if tenantID == uuid.Nil {
+		return nil, errNoTenant
+	}
 	var logs []domain.AuditLog
-	query := database.DB.Where("timestamp BETWEEN ? AND ?", startTime, endTime).
+	query := s.handle().Where("tenant_id = ? AND timestamp BETWEEN ? AND ?", tenantID, startTime, endTime).
 		Order("timestamp DESC").
 		Limit(limit).
 		Offset(offset)

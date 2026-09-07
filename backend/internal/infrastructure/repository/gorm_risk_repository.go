@@ -631,11 +631,17 @@ func (r *GormRiskRepository) GetHistory(ctx context.Context, riskID uuid.UUID, t
 		limit = 20
 	}
 
+	// The tenant predicate leads, and the note that used to stand here ("add a
+	// tenant_id filter IF audit_logs has the column") is answered: it does, since
+	// #532. Until then this read filtered on risk_id alone — the same defect as
+	// GET /api/v1/audit-logs, on the same table. No route reaches this method
+	// today (internal/api/http/handlers is not wired into main.go), which is why
+	// it survived the #532 sweep of the routed reads; an unscoped query that
+	// nothing calls yet is how the next caller inherits the defect.
 	var history []domain.AuditLogEntry
 	err := r.db.WithContext(ctx).
 		Table("audit_logs").
-		Where("risk_id = ?", riskID).
-		// NOTE: Add tenant_id filter if audit_logs table has tenant_id column
+		Where("tenant_id = ? AND risk_id = ?", tenantID, riskID).
 		Order("timestamp DESC").
 		Offset((page - 1) * limit).
 		Limit(limit).

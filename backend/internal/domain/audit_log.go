@@ -62,10 +62,32 @@ func (r AuditLogResult) String() string {
 	return string(r)
 }
 
-// AuditLog represents an audit trail entry for authentication and authorization events
+// AuditLog represents an audit trail entry for authentication and authorization events.
+//
+// TENANCY (#532). This table had no tenant column at all until 2026-09-04, so
+// GET /api/v1/audit-logs returned every tenant's authentication log to any
+// organisation administrator — the same failure as the retired
+// GET /timeline/recent, which returned every tenant's risk history because
+// RiskHistory carried no tenant_id either (docs/JOURNAL.md item 36).
+//
+// TenantID is a POINTER, and that is the whole isolation mechanism rather than a
+// convenience:
+//
+//   - It holds an organizations.id — the same id space as the `tenant_id` JWT
+//     claim, and NOT users.tenant_id, which points at the separate `tenants`
+//     table. Writing the wrong one attributes a row to an id no session ever
+//     carries, which loses the event silently instead of leaking it.
+//   - NULL means "could not be attributed to an organisation": a pre-auth event
+//     where no user resolved. In SQL `tenant_id = ?` never matches NULL, so an
+//     unattributed row is invisible to EVERY tenant rather than visible to all
+//     of them. That is the fail-closed direction, and it is why the reads below
+//     need no special case for it.
+//
+// Mirrors AuthAuditLog.TenantID, the same shape on the newer auth trail.
 type AuditLog struct {
 	ID           uuid.UUID        `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	UserID       *uuid.UUID       `gorm:"index" json:"user_id,omitempty"` // NULL for pre-auth events
+	TenantID     *uuid.UUID       `gorm:"type:uuid;index" json:"tenant_id,omitempty"` // NULL = unattributed; see above
+	UserID       *uuid.UUID       `gorm:"index" json:"user_id,omitempty"`             // NULL for pre-auth events
 	Action       AuditLogAction   `gorm:"type:varchar(100);index" json:"action"`
 	Resource     AuditLogResource `gorm:"type:varchar(100)" json:"resource,omitempty"`
 	ResourceID   *uuid.UUID       `json:"resource_id,omitempty"` // ID of affected resource
