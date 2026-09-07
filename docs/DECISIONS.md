@@ -5,7 +5,41 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-None. Every entry in this register is resolved as of 2026-09-02.
+### D-029 — billing self-service narrowed to admins by the #529 authz audit · 2026-09-07
+**Escalated by** — the #529 audit of the 92 protected routes carrying no permission
+guard. Implemented on that branch and shipped as part of its PR, because leaving the
+routes open while waiting was the worse of the two states. **Reverting is one line
+each** if the owner disagrees.
+
+**What changed** — `POST /billing/trial` and `POST /billing/checkout` now carry
+`middleware.RequireRole("admin", "root")`, the same guard `POST /billing/change-plan`
+and `POST /billing/cancel` already had. `GET /billing` and `GET /entitlements` are
+untouched: every member still reads the plan and the paywall snapshot.
+
+**Why** — the mount site said *"Billing self-service is available to any member; the
+admin-only verbs (manual plan change, cancel) are guarded by role."* But starting a
+trial burns the organisation's one trial window (the service returns
+`ErrAlreadySubscribed` on the second attempt), and checkout opens a hosted payment
+session in the organisation's name. Both move the tenant onto a different plan, which
+is the same class of act as change-plan — the asymmetry read as an oversight rather
+than a decision. CLAUDE.md requires anything touching pricing or costing money to reach
+the owner, hence this entry.
+
+**What it costs if wrong** — a non-admin evaluating OpenRisk cannot start the trial
+themselves and has to ask an admin. That is friction on the activation path, and it is
+the reason this is a decision and not a bug fix.
+
+**The owner's call, one of:**
+- **A (implemented)** — both verbs admin-only. Consistent with change-plan/cancel.
+- **B** — trial stays open to any member, checkout goes admin-only. Keeps
+  self-service evaluation, guards the money.
+- **C** — revert both. Self-service was deliberate and the trial window is cheap.
+
+**Recommendation** — A. If activation data later shows non-admin trial starts mattered,
+B is the compromise and costs one line.
+
+**Blocks** — nothing. #529's PR ships either way.
+
 
 ## Resolved
 
