@@ -127,6 +127,11 @@ func New(store domain.BulkStore, journal Journal) *Engine {
 // EntityType is the register this engine serves.
 func (e *Engine) EntityType() string { return e.store.EntityType() }
 
+// SupportedActions is what this register can actually do. The bulk bar reads it
+// rather than hard-coding a per-module list, so the UI cannot offer an action
+// the server would refuse.
+func (e *Engine) SupportedActions() []domain.BulkAction { return e.store.SupportedBulkActions() }
+
 // Preview reports what a change would do. It MUST NOT mutate anything: it goes
 // through LoadBulk, which is the read-only half of the port, and computes the
 // after-state with domain.BulkChange.PredictOn — the same function the store
