@@ -137,12 +137,30 @@ export const EMPTY_TABLE_STATE: TableState = {
   filters: {},
 };
 
-/** A user-named filter combination, persisted per table id. */
+/**
+ * A user-named filter combination, persisted per table id.
+ *
+ * Server-side since #580: a view lives against the tenant, not in one browser,
+ * so it survives clearing site data and can be handed to the risk committee.
+ */
 export interface SavedView {
   id: string;
   name: string;
   state: Pick<TableState, 'q' | 'filters' | 'sort'>;
+  /**
+   * personal — only its owner sees it. shared — every member of the same tenant
+   * sees it. Sharing never crosses a tenant, and there is deliberately nothing
+   * in between: a view shared with a named subset of people is a permissions
+   * design, not a table feature.
+   */
+  visibility: SavedViewVisibility;
+  /** Whether the signed-in user owns it — only an owner (or a tenant admin) may edit it. */
+  isOwn: boolean;
+  /** Who shared it, when the server could resolve a name. Display only. */
+  ownerEmail?: string;
 }
+
+export type SavedViewVisibility = 'personal' | 'shared';
 
 /** Per-user column layout, persisted per table id. */
 export interface ColumnPrefs {

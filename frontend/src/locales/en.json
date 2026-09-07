@@ -356,5 +356,22 @@
       "overdue_remediation": "Overdue remediation",
       "unknown": "Action required"
     }
+  },
+  "savedViews": {
+    "loading": "Loading your views…",
+    "error": "Your saved views could not be loaded.",
+    "retry": "Retry",
+    "empty": "No saved view yet.",
+    "emptyHint": "Filter the register, name the view, and it will be waiting on your next visit.",
+    "share": "Share with my organisation",
+    "shareHint": "Everyone in your organisation will see this view.",
+    "sharedBadge": "Shared",
+    "sharedBy": "Shared by {email}",
+    "makeShared": "Share this view",
+    "makePersonal": "Make this view personal",
+    "mutationError": "That change could not be saved. Try again.",
+    "nameRequired": "Name this view.",
+    "nameTooLong": "120 characters maximum.",
+    "nameUnreadable": "Use at least one letter or digit."
   }
 }

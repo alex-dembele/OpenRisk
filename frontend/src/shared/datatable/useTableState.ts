@@ -11,12 +11,27 @@
 //   ?q=log4j&sort=cvss:desc&page=2&size=50&f.severity=critical,high&f.kev=true
 //
 // Unknown params (notably `?focus=<id>` from universal search) are preserved.
-// Column layout and saved views are per-user, not per-URL, so they live in
-// localStorage keyed by the table id.
+//
+// Column layout is per-user and per-browser, so it stays in localStorage keyed
+// by the table id. Saved VIEWS no longer do (#580): a named view lives on the
+// server against the tenant, so it survives clearing site data and can be shared
+// with the risk committee.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { EMPTY_TABLE_STATE, type ColumnPrefs, type SavedView, type TableState } from './types';
+import { useAuthStore } from '../../hooks/useAuthStore';
+import {
+  migrateLegacyViews,
+  savedViewService,
+  type SavedViewDTO,
+} from '../../services/savedViewService';
+import {
+  EMPTY_TABLE_STATE,
+  type ColumnPrefs,
+  type SavedView,
+  type SavedViewVisibility,
+  type TableState,
+} from './types';
 
 const FACET_PREFIX = 'f.';
 
@@ -240,34 +255,162 @@ function writeJson(key: string, value: unknown): void {
   }
 }
 
-/** Per-user saved filter combinations for one table. */
-export function useSavedViews(tableId: string) {
-  const key = `openrisk.table.${tableId}.views`;
-  const [views, setViews] = useState<SavedView[]>(() => readJson<SavedView[]>(key, []));
+/**
+ * Saved filter combinations for one table — server-side since #580.
+ *
+ * Three things this hook is careful about, each of them an acceptance criterion:
+ *
+ *  - A saved-views outage NEVER blocks the register (criterion 7). The views are
+ *    fetched independently of the rows and every failure lands in `error`; the
+ *    table renders with default filters regardless, and the panel offers a retry.
+ *  - The one-time localStorage migration clears the local copy only after every
+ *    view is confirmed stored (criterion 6). See migrateLegacyViews.
+ *  - Mutations are optimistic and roll back on failure, so naming a view feels
+ *    instant and a failed save is visible rather than silent.
+ */
+export type SavedViewsStatus = 'loading' | 'ready' | 'error';
+
+export interface SavedViewsApi {
+  views: SavedView[];
+  status: SavedViewsStatus;
+  /** Set when a save/rename/share/delete failed. Cleared by the next attempt. */
+  mutationError: boolean;
+  save: (name: string, state: SavedView['state'], visibility?: SavedViewVisibility) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  setVisibility: (id: string, visibility: SavedViewVisibility) => Promise<void>;
+  /** Refetch after an error — the affordance behind criterion 7. */
+  retry: () => void;
+  /** Whether the signed-in user may edit a view they do not own (tenant admin). */
+  canEditOthers: boolean;
+}
+
+function toSavedView(dto: SavedViewDTO, currentUserId: string): SavedView {
+  return {
+    id: dto.id,
+    name: dto.name,
+    state: {
+      q: dto.state?.q ?? '',
+      filters: dto.state?.filters ?? {},
+      sort: dto.state?.sort ? { key: dto.state.sort.key, dir: dto.state.sort.dir ?? 'desc' } : null,
+    },
+    visibility: dto.visibility,
+    isOwn: dto.user_id === currentUserId,
+    ownerEmail: dto.owner_email,
+  };
+}
+
+export function useSavedViews(tableId: string): SavedViewsApi {
+  const user = useAuthStore((s) => s.user);
+  const currentUserId = user?.id ?? '';
+  const canEditOthers = user?.role === 'admin' || user?.role === 'root';
+
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [status, setStatus] = useState<SavedViewsStatus>('loading');
+  const [mutationError, setMutationError] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    if (!tableId) return;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    (async () => {
+      setStatus('loading');
+      try {
+        // Migrate anything this browser still holds BEFORE the read, so the
+        // first render already shows the user's own work. A migration failure
+        // is not fatal: the views stay in localStorage and are retried on the
+        // next load, and the server-side list is fetched either way.
+        try {
+          await migrateLegacyViews(tableId);
+        } catch {
+          /* retried next load — never discarded */
+        }
+        const dtos = await savedViewService.list(tableId, controller.signal);
+        if (cancelled) return;
+        setViews(dtos.map((dto) => toSavedView(dto, currentUserId)));
+        setStatus('ready');
+      } catch {
+        if (cancelled) return;
+        // Criterion 7: the register is already rendering. This only means the
+        // saved-views strip cannot be drawn, and the panel says so.
+        setStatus('error');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [tableId, currentUserId, reloadToken]);
+
+  const retry = useCallback(() => setReloadToken((n) => n + 1), []);
 
   const save = useCallback(
-    (name: string, state: SavedView['state']) => {
-      setViews((prev) => {
-        const next = [...prev.filter((v) => v.name !== name), { id: `${Date.now()}`, name, state }];
-        writeJson(key, next);
-        return next;
-      });
+    async (name: string, state: SavedView['state'], visibility: SavedViewVisibility = 'personal') => {
+      setMutationError(false);
+      // Optimistic: the view appears the instant it is named (rule 10). The
+      // temporary id is replaced by the server's on success.
+      const optimisticId = `pending:${Date.now()}`;
+      const optimistic: SavedView = { id: optimisticId, name, state, visibility, isOwn: true };
+      setViews((prev) => [...prev, optimistic]);
+      try {
+        const created = await savedViewService.create({
+          table_id: tableId,
+          name,
+          visibility,
+          state: { q: state.q, filters: state.filters, sort: state.sort },
+        });
+        setViews((prev) =>
+          prev.map((v) => (v.id === optimisticId ? toSavedView(created, currentUserId) : v)),
+        );
+      } catch {
+        setViews((prev) => prev.filter((v) => v.id !== optimisticId));
+        setMutationError(true);
+      }
     },
-    [key],
+    [tableId, currentUserId],
   );
 
-  const remove = useCallback(
-    (id: string) => {
-      setViews((prev) => {
-        const next = prev.filter((v) => v.id !== id);
-        writeJson(key, next);
-        return next;
-      });
-    },
-    [key],
-  );
+  const remove = useCallback(async (id: string) => {
+    setMutationError(false);
+    let removed: SavedView | undefined;
+    setViews((prev) => {
+      removed = prev.find((v) => v.id === id);
+      return prev.filter((v) => v.id !== id);
+    });
+    try {
+      await savedViewService.remove(id);
+    } catch {
+      // Put it back where it was rather than leaving the user believing a view
+      // they still have is gone.
+      if (removed) setViews((prev) => [...prev, removed!]);
+      setMutationError(true);
+    }
+  }, []);
 
-  return { views, save, remove };
+  const setVisibility = useCallback(async (id: string, visibility: SavedViewVisibility) => {
+    setMutationError(false);
+    let previous: SavedViewVisibility | undefined;
+    setViews((prev) =>
+      prev.map((v) => {
+        if (v.id !== id) return v;
+        previous = v.visibility;
+        return { ...v, visibility };
+      }),
+    );
+    try {
+      await savedViewService.update(id, { visibility });
+    } catch {
+      if (previous) {
+        const rollback = previous;
+        setViews((prev) => prev.map((v) => (v.id === id ? { ...v, visibility: rollback } : v)));
+      }
+      setMutationError(true);
+    }
+  }, []);
+
+  return { views, status, mutationError, save, remove, setVisibility, retry, canEditOthers };
 }
 
 /**

@@ -7,12 +7,30 @@
 // selection scope, column persistence, CSV shape, and the three UI states.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router';
 import { DataTable } from '../DataTable';
 import { useTableState } from '../useTableState';
 import { buildCsv } from '../exportCsv';
 import type { BulkAction, Column, Facet, RowAction } from '../types';
+import { savedViewService } from '../../../services/savedViewService';
+
+// Saved views are server-side since #580. The transport is mocked; the Zod form
+// schema is deliberately NOT — it is the real client-side gate on the form.
+vi.mock('../../../services/savedViewService', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../services/savedViewService')>();
+  return {
+    ...actual,
+    migrateLegacyViews: vi.fn(async () => 0),
+    savedViewService: {
+      list: vi.fn(async () => []),
+      create: vi.fn(),
+      update: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    },
+  };
+});
 
 interface Row {
   id: string;
@@ -116,6 +134,22 @@ const renderTable = (props: Parameters<typeof Harness>[0] = {}, initialEntries =
 
 beforeEach(() => {
   window.localStorage.clear();
+  vi.mocked(savedViewService.list).mockResolvedValue([]);
+  vi.mocked(savedViewService.create).mockImplementation(async (body) => ({
+    id: 'view-1',
+    tenant_id: 'tenant-1',
+    // The harness renders with no signed-in user, so the owner id that makes a
+    // view the caller's own is the empty one.
+    user_id: '',
+    table_id: body.table_id,
+    name: body.name,
+    visibility: body.visibility ?? 'personal',
+    state: body.state,
+  }));
+  vi.mocked(savedViewService.remove).mockResolvedValue(undefined);
+  vi.mocked(savedViewService.update).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof savedViewService.update>>,
+  );
 });
 
 describe('states', () => {
@@ -178,16 +212,32 @@ describe('search and facets are distinct affordances', () => {
     expect(screen.getByTestId('filters-result-count')).toHaveTextContent('2');
   });
 
-  it('saves a named filter and re-applies it', () => {
+  it('saves a named filter to the server and re-applies it', async () => {
     renderTable({}, ['/?f.sev=critical']);
     fireEvent.click(screen.getByTestId('filters-trigger'));
+    await screen.findByTestId('saved-views-empty');
+
     fireEvent.change(screen.getByTestId('saved-view-name'), { target: { value: 'Critiques' } });
     fireEvent.click(screen.getByTestId('saved-view-save'));
+
+    // The view appears optimistically, then is confirmed by the server.
+    await screen.findByTestId('saved-view-Critiques');
+    await waitFor(() =>
+      expect(savedViewService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          table_id: 'test',
+          name: 'Critiques',
+          visibility: 'personal',
+          state: expect.objectContaining({ filters: { sev: ['critical'] } }),
+        }),
+      ),
+    );
 
     // Reset does not close the panel — the saved view is right there to re-apply.
     fireEvent.click(screen.getByTestId('filters-reset'));
     expect(screen.getByTestId('url').textContent).not.toContain('f.sev');
 
+    // Re-query: the optimistic row was replaced by the server-confirmed one.
     fireEvent.click(screen.getByTestId('saved-view-Critiques'));
     expect(screen.getByTestId('url').textContent).toContain('f.sev=critical');
   });
