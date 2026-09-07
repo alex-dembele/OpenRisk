@@ -95,6 +95,12 @@ func (r *stateRepo) BulkUpdate(context.Context, uuid.UUID, []domain.RiskUpdate) 
 func (r *stateRepo) BulkDelete(context.Context, []uuid.UUID, uuid.UUID) (int64, error) { return 0, nil }
 func (r *stateRepo) BulkCreate(context.Context, []*domain.Risk) (int64, error)         { return 0, nil }
 
+func (r *stateRepo) BulkApply(
+	context.Context, uuid.UUID, []uuid.UUID, func(*domain.Risk) error,
+) ([]domain.RiskMutation, error) {
+	return nil, nil
+}
+
 func newFixture(state domain.RiskState) (*stateRepo, uuid.UUID, uuid.UUID) {
 	tenant, id := uuid.New(), uuid.New()
 	r := &domain.Risk{ID: id, TenantID: tenant, Title: "Fuite S3"}
