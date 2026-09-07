@@ -6,6 +6,7 @@
 package handler
 
 import (
+	"context"
 	"log"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/opendefender/openrisk/internal/application/risk"
 	"github.com/opendefender/openrisk/internal/domain"
+	"github.com/opendefender/openrisk/internal/infrastructure/audittrail"
 	"github.com/opendefender/openrisk/internal/infrastructure/database"
 	"github.com/opendefender/openrisk/internal/infrastructure/redis"
 	"github.com/opendefender/openrisk/internal/middleware"
@@ -34,6 +36,17 @@ type RiskHandler struct {
 	redisClient       *redis.Client
 	crq               *crq.Quantifier                 // Cyber Risk Quantification (XAF + USD)
 	presenters        *risk.FinancialPresenterFactory // optional: tenant currency + FX
+	bulkActionUC      *risk.BulkActionUseCase         // #581, attached via WithBulkAction
+}
+
+// WithBulkAction attaches the bulk-action use case behind POST /risks/bulk.
+//
+// Optional in the WithX sense only so the nine-argument constructor and its
+// existing callers stay untouched; the ROUTE is not registered unless this is
+// set, so an unattached use case cannot be reached rather than half-working.
+func (h *RiskHandler) WithBulkAction(uc *risk.BulkActionUseCase) *RiskHandler {
+	h.bulkActionUC = uc
+	return h
 }
 
 // WithFinancialPresenters attaches the tenant currency/FX presenter factory used
@@ -710,4 +723,61 @@ func (h *RiskHandler) DeleteRisk(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(204)
+}
+
+
+// ---------------------------------------------------------------------------
+// Bulk actions — POST /api/v1/risks/bulk (#581)
+// ---------------------------------------------------------------------------
+
+// BulkAction applies one mutation to a set of risks, all or none (D-036).
+//
+// The route is guarded by RequirePermission("risks:update") at registration, so
+// a caller without it never reaches this function — that is criterion 8, and it
+// is enforced by middleware rather than re-implemented here.
+//
+// Errors are mapped through writeAppError, not flattened to 500. That matters:
+// a stale or foreign id must come back 404, and the previous handler turned
+// every use-case error into "failed to perform bulk action" with a 500, which
+// made a perfectly ordinary "one of your ids no longer exists" indistinguishable
+// from a server fault.
+func (h *RiskHandler) BulkAction(c *fiber.Ctx) error {
+	if h.bulkActionUC == nil {
+		return c.Status(fiber.StatusNotImplemented).
+			JSON(fiber.Map{"error": "bulk actions are not enabled"})
+	}
+
+	var req risk.BulkActionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	// Identity comes from the signed session only. The tenant is what every read
+	// and write in the batch is scoped by, so a body-supplied one would be a
+	// cross-tenant mutation primitive.
+	result, err := h.bulkActionUC.Execute(
+		auditCtx(c), tenantID(c), req, userID(c),
+	)
+	if err != nil {
+		return writeAppError(c, err)
+	}
+	return c.JSON(result)
+}
+
+// auditCtx carries the acting identity and request metadata into the use case,
+// so the audit entries it writes name a person and a request rather than a
+// system actor. Same shape as govCtx in governance_handler.go.
+func auditCtx(c *fiber.Ctx) context.Context {
+	uid := userID(c)
+	var actorID *uuid.UUID
+	if uid != uuid.Nil {
+		actorID = &uid
+	}
+	return audittrail.WithActor(c.UserContext(), audittrail.Actor{
+		ID:        actorID,
+		TenantID:  tenantID(c),
+		IPAddress: c.IP(),
+		UserAgent: c.Get("User-Agent"),
+		RequestID: c.Get("X-Request-ID"),
+	})
 }

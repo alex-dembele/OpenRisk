@@ -1272,6 +1272,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/risks/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one action to many risks, all or none
+         * @description All-or-nothing (decision D-036). Either every named risk is modified or none is: the batch runs in a single transaction, and one stale, foreign or otherwise unresolvable id fails the whole request without writing anything. There is deliberately no per-item outcome to report.
+         *     One audit entry is written per modified risk, carrying the acting user.
+         *     A risk id belonging to another tenant answers 404 — identical to a fabricated id — because the tenant predicate is part of the row load.
+         */
+        post: operations["bulkRiskAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2310,6 +2332,32 @@ export interface components {
             created_at?: string;
             /** Format: date-time */
             updated_at?: string;
+        };
+        BulkRiskActionInput: {
+            /** @enum {string} */
+            type: "change_status" | "assign_to" | "add_tags" | "remove_tags" | "delete";
+            /** @description Repeated ids are de-duplicated before the batch runs. */
+            risk_ids: string[];
+            /** @description Required for change_status. */
+            status?: string;
+            /**
+             * Format: uuid
+             * @description Required for assign_to.
+             */
+            assign_to_id?: string;
+            /** @description Required for add_tags and remove_tags. Removing an absent tag is a no-op. */
+            tags?: string[];
+            /** @description Recorded on each audit entry. */
+            justification?: string;
+        };
+        BulkRiskActionResult: {
+            /** @description How many distinct risks were named. */
+            total: number;
+            /** @description Equals total on success. A failure is an HTTP error, not a partial number, so this is never a shortfall. */
+            applied: number;
+            risk_ids: string[];
+            /** @description Audit entries written. Below applied only if the trail was unavailable; the mutation still happened, and the gap is reported rather than hidden. */
+            audited: number;
         };
         ErrorResponse: {
             /** @example Invalid input */
@@ -4836,6 +4884,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+        };
+    };
+    bulkRiskAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRiskActionInput"];
+            };
+        };
+        responses: {
+            /** @description The batch was applied in full */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkRiskActionResult"];
+                };
+            };
+            /** @description Validation error — empty selection, more than 100 items, an unknown action type, or a missing action parameter. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller lacks risks:update, or the session carries no tenant */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description At least one id could not be resolved — absent, or belonging to another tenant, deliberately indistinguishable. Nothing was modified. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

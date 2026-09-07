@@ -125,14 +125,47 @@ export interface UpdateRiskInput {
   review_interval_days?: number;
 }
 
+/**
+ * POST /risks/bulk (#581).
+ *
+ * This shape is CORRECTED, not extended: it previously declared `action` and a
+ * nested `payload`, while the API has always read `type` with the parameters
+ * flat, and it omitted `remove_tags` entirely. Nothing called it, so the
+ * mismatch never surfaced — the endpoint itself was mounted only inside a
+ * RegisterRoutes function that main.go never invoked.
+ */
 export interface BulkRiskActionInput {
-  action: 'change_status' | 'assign_to' | 'add_tags' | 'delete';
+  type: 'change_status' | 'assign_to' | 'add_tags' | 'remove_tags' | 'delete';
   risk_ids: string[];
-  payload?: {
-    status?: RiskStatus;
-    assignee?: string;
-    tags?: string[];
-  };
+  /** change_status */
+  status?: RiskStatus;
+  /** assign_to */
+  assign_to_id?: string;
+  /** add_tags / remove_tags */
+  tags?: string[];
+  /** Recorded on each audit entry. */
+  justification?: string;
+}
+
+/**
+ * The outcome of a bulk action.
+ *
+ * All-or-nothing (decision D-036): the call either applied to every risk or to
+ * none, so there is no per-item tally. A failure arrives as an HTTP error, not
+ * as a `failed` count — the previous {success, failed, errors} shape could only
+ * ever report "all" or "none" once the mutation became transactional, and a
+ * structurally-always-zero `failed` invites handling that can never run.
+ */
+export interface BulkRiskActionResult {
+  total: number;
+  applied: number;
+  risk_ids: string[];
+  /**
+   * How many audit entries were written. It falls short of `applied` only if the
+   * trail itself was unavailable — the mutation still happened. Surfaced rather
+   * than hidden so "changed but not fully journalled" is visible.
+   */
+  audited: number;
 }
 
 export const riskService = {
@@ -180,8 +213,9 @@ export const riskService = {
     return response.data;
   },
 
-  bulkAction: async (payload: BulkRiskActionInput): Promise<void> => {
-    await api.post('/risks/bulk', payload);
+  bulkAction: async (payload: BulkRiskActionInput): Promise<BulkRiskActionResult> => {
+    const response = await api.post<BulkRiskActionResult>('/risks/bulk', payload);
+    return response.data;
   },
 
   exportRisks: async (params: RiskQueryParams, format: 'csv' | 'json' | 'xlsx' = 'csv') => {

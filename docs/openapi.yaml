@@ -2106,6 +2106,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # ==================== RISK BULK ACTIONS (#581) ====================
+  /risks/bulk:
+    post:
+      tags:
+        - Risks
+      summary: Apply one action to many risks, all or none
+      description: >-
+        All-or-nothing (decision D-036). Either every named risk is modified or
+        none is: the batch runs in a single transaction, and one stale, foreign
+        or otherwise unresolvable id fails the whole request without writing
+        anything. There is deliberately no per-item outcome to report.
+
+        One audit entry is written per modified risk, carrying the acting user.
+
+        A risk id belonging to another tenant answers 404 — identical to a
+        fabricated id — because the tenant predicate is part of the row load.
+      operationId: bulkRiskAction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRiskActionInput'
+      responses:
+        '200':
+          description: The batch was applied in full
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkRiskActionResult'
+        '400':
+          description: >-
+            Validation error — empty selection, more than 100 items, an unknown
+            action type, or a missing action parameter.
+        '401':
+          description: Unauthorized
+        '403':
+          description: The caller lacks risks:update, or the session carries no tenant
+        '404':
+          description: >-
+            At least one id could not be resolved — absent, or belonging to
+            another tenant, deliberately indistinguishable. Nothing was modified.
+
 # ==================== COMPONENTS ====================
 components:
   securitySchemes:
@@ -3707,6 +3752,67 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    BulkRiskActionInput:
+      type: object
+      required:
+        - type
+        - risk_ids
+      properties:
+        type:
+          type: string
+          enum: [change_status, assign_to, add_tags, remove_tags, delete]
+        risk_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Repeated ids are de-duplicated before the batch runs.
+          items:
+            type: string
+            format: uuid
+        status:
+          type: string
+          description: Required for change_status.
+        assign_to_id:
+          type: string
+          format: uuid
+          description: Required for assign_to.
+        tags:
+          type: array
+          description: Required for add_tags and remove_tags. Removing an absent tag is a no-op.
+          items:
+            type: string
+        justification:
+          type: string
+          description: Recorded on each audit entry.
+
+    BulkRiskActionResult:
+      type: object
+      required:
+        - total
+        - applied
+        - risk_ids
+        - audited
+      properties:
+        total:
+          type: integer
+          description: How many distinct risks were named.
+        applied:
+          type: integer
+          description: >-
+            Equals total on success. A failure is an HTTP error, not a partial
+            number, so this is never a shortfall.
+        risk_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        audited:
+          type: integer
+          description: >-
+            Audit entries written. Below applied only if the trail was
+            unavailable; the mutation still happened, and the gap is reported
+            rather than hidden.
 
     ErrorResponse:
       type: object
