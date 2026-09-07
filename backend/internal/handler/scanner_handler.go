@@ -290,6 +290,13 @@ func (h *ScannerHandler) StreamScanEvents(c *fiber.Ctx) error {
 	if tid == uuid.Nil {
 		return c.Status(401).JSON(fiber.Map{"error": "missing tenant"})
 	}
+	// DEPRECATED (#347). No browser ever consumed this: it requires a Bearer
+	// header EventSource cannot send. There is NO streaming replacement — the
+	// realtime catalog has no scan.* events — so the successor named here is the
+	// polling endpoint the console actually uses. The agent's own stream,
+	// /scanner/agent/stream, is a different endpoint and is NOT deprecated.
+	markSSEDeprecated(c, "/api/v1/scanner/jobs")
+
 	h.streamChannel(c, scanpkg.SSEChannel(tid), nil, nil)
 	return nil
 }

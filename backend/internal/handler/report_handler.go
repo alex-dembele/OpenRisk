@@ -336,6 +336,11 @@ func (h *ReportHandler) Progress(c *fiber.Ctx) error {
 	}
 	tenant := tenantID(c)
 
+	// DEPRECATED (#347). There is NO streaming replacement — the realtime catalog
+	// has no report.* events — so the successor is the polling endpoint, which
+	// returns the same progress/step/run_state this stream pushes.
+	markSSEDeprecated(c, "/api/v1/reports/:reportId")
+
 	// Read once up front: a report that already finished must not leave the
 	// client watching an empty stream forever.
 	rep, err := h.svc.Get(c.UserContext(), tenant, id)

@@ -44,6 +44,11 @@ func (h *MitigationEventsHandler) Stream(c *fiber.Ctx) error {
 	}
 	tenantID := claims.TenantID
 
+	// DEPRECATED (#347). Superseded by the shared realtime stream, which carries
+	// the session in an HttpOnly cookie instead of accepting the access token as
+	// a query parameter the way this endpoint does.
+	markSSEDeprecated(c, "/api/v1/realtime/events?aggregates=mitigation")
+
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("Connection", "keep-alive")
