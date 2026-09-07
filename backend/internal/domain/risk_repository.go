@@ -83,6 +83,34 @@ type RiskRepository interface {
 
 	// BulkDelete soft-deletes multiple risks atomically.
 	BulkDelete(ctx context.Context, ids []uuid.UUID, tenantID uuid.UUID) (int64, error)
+
+	// BulkApply loads every named risk (tenant-scoped), applies mutate to each,
+	// and persists them all inside ONE transaction. It returns the risks as they
+	// were BEFORE mutation and as they are AFTER, paired, so the caller can
+	// journal a faithful before → after per risk.
+	//
+	// All-or-nothing (D-036, option A). If ANY id is absent — deleted since the
+	// selection was made, fabricated, or belonging to another tenant — nothing is
+	// written and the call fails with ErrNotFound. Same for a mutate that
+	// refuses, or a write that errors. There is deliberately no partial outcome
+	// to report: "31 of 40 risks were reassigned and we cannot tell you which"
+	// is a supervisory finding, and a clean rollback is not.
+	//
+	// A foreign-tenant id is indistinguishable from a fabricated one, because the
+	// load is scoped by tenant_id and both simply fail to resolve.
+	BulkApply(ctx context.Context, tenantID uuid.UUID, ids []uuid.UUID, mutate func(*Risk) error) ([]RiskMutation, error)
+}
+
+// RiskMutation is one risk's before → after pair from a BulkApply, and is what
+// the audit journal is built from. Both snapshots are deep enough to explain the
+// change and no deeper: a bulk action changes a handful of named fields.
+type RiskMutation struct {
+	RiskID uuid.UUID
+	Before map[string]interface{}
+	After  map[string]interface{}
+	// ChangedFields names the keys that actually differ, so a no-op item (a tag
+	// removal for a tag the risk never carried) is visible as such.
+	ChangedFields []string
 }
 
 // RiskQuery encapsulates filtering/pagination parameters for listing risks.
