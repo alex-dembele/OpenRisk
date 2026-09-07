@@ -37,9 +37,17 @@ import (
 // Many of these are correct — a route that acts on the caller's OWN sessions,
 // tokens or onboarding state is authorised by authentication itself, and some
 // handlers enforce entitlements internally. What the list records is that the
-// middleware layer does not decide, so something else must. Auditing which of
-// the 92 genuinely need a guard is its own issue; this test exists so the
-// number cannot grow quietly while that happens.
+// middleware layer does not decide, so something else must.
+//
+// #529 audited all 92 and judged each one. 15 were wrong and now carry a guard
+// (billing plan verbs, the integration connectivity probe, the custom-field
+// definitions, bulk operations, and the seven per-risk history reads that every
+// other /risks/* read already gated). Two more — creating and revoking a
+// governance delegation — kept the open route on purpose and gained the missing
+// authority check inside the use case instead, because who may act there is a
+// property of the record, not of the path. The 77 below are the survivors: each
+// is either the caller's own resource or enforced inside its handler, and each
+// mount site in main.go now says which.
 // ---------------------------------------------------------------------------
 
 // routesWithoutPermissionGuard is the frozen set of protected routes carrying
@@ -51,7 +59,6 @@ var routesWithoutPermissionGuard = []string{
 	"DELETE /auth/pat/:id",
 	"DELETE /auth/sessions/:id",
 	"DELETE /auth/sessions/others",
-	"DELETE /custom-fields/:id",
 	"DELETE /tokens/:id",
 	"GET /action-center",
 	"GET /activation/state",
@@ -99,13 +106,6 @@ var routesWithoutPermissionGuard = []string{
 	"GET /ownership/assignable",
 	"GET /ownership/me",
 	"GET /rbac/business-roles",
-	"GET /risks/:id/incidents",
-	"GET /risks/:id/timeline",
-	"GET /risks/:id/timeline/changes/:type",
-	"GET /risks/:id/timeline/score-changes",
-	"GET /risks/:id/timeline/since/:timestamp",
-	"GET /risks/:id/timeline/status-changes",
-	"GET /risks/:id/timeline/trend",
 	"GET /score",
 	"GET /score/model",
 	"GET /search",
@@ -115,23 +115,16 @@ var routesWithoutPermissionGuard = []string{
 	"GET /timeline",
 	"GET /tokens",
 	"GET /tokens/:id",
-	"PATCH /custom-fields/:id",
 	"PATCH /users/:id",
 	"POST /activation/celebrated",
 	"POST /auth/mfa/disable",
 	"POST /auth/pat",
 	"POST /auth/switch-org",
-	"POST /billing/checkout",
-	"POST /billing/trial",
-	"POST /bulk-operations",
-	"POST /custom-fields",
-	"POST /custom-fields/templates/:id/apply",
 	"POST /governance/approvals",
 	"POST /governance/approvals/:id/cancel",
 	"POST /governance/approvals/:id/decide",
 	"POST /governance/delegations",
 	"POST /governance/delegations/:id/revoke",
-	"POST /integrations/:id/test",
 	"POST /marketplace/connectors/:id/reviews",
 	"POST /onboarding/complete",
 	"POST /score/preview",
@@ -152,11 +145,16 @@ type protectedRoute struct {
 // parseProtectedRoutes reads the composition root and classifies every route
 // mounted on the authenticated group.
 //
-// It resolves guard VARIABLES as well as inline calls: main.go builds 54 of
-// them (riskCreate, scannerRead, complianceControlRead, …) and mounts most
+// It resolves guard VARIABLES as well as inline calls: main.go builds them by
+// the dozen (riskCreate, scannerRead, complianceControlRead, …) and mounts most
 // routes with those rather than with a literal RequirePermission. A checker
-// that looked only for the literal would report 302 unguarded routes instead of
-// 92 — a false alarm three times the size of the real number.
+// that looked only for the literal would report unguarded routes by the
+// hundred — a false alarm several times the size of the real number.
+//
+// KNOWN GAP (#575): only routes mounted directly on `protected` are seen. The
+// six protected.Group() sub-groups — /incidents, /notifications, /score-engine,
+// /rbac/users, /rbac/roles, /rbac/tenants — are invisible to this parser, so
+// the ratchet does not cover them.
 func parseProtectedRoutes(t *testing.T) []protectedRoute {
 	t.Helper()
 

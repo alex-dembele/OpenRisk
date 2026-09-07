@@ -1142,13 +1142,16 @@ func main() {
 	entitlementHandler := handlers.NewEntitlementHandler(entitlementService)
 	billingHandler := handlers.NewBillingHandler(billingService, billingRegistry)
 
-	// The entitlements snapshot drives the whole paywall UX; every authenticated
-	// user may read it. Billing self-service is available to any member; the
-	// admin-only verbs (manual plan change, cancel) are guarded by role.
+	// The entitlements snapshot drives the whole paywall UX and the current
+	// subscription is read by every member — the session alone authorises those.
+	// Every verb that MOVES the tenant onto a different plan is admin-only:
+	// starting a trial burns the organisation's one trial window and checkout
+	// opens a payment session in its name, which is the same class of act as
+	// change-plan and cancel, not "self-service" (#529).
 	protected.Get("/entitlements", entitlementHandler.GetEntitlements)
 	protected.Get("/billing", billingHandler.GetBilling)
-	protected.Post("/billing/trial", billingHandler.StartTrial)
-	protected.Post("/billing/checkout", billingHandler.Checkout)
+	protected.Post("/billing/trial", middleware.RequireRole("admin", "root"), billingHandler.StartTrial)
+	protected.Post("/billing/checkout", middleware.RequireRole("admin", "root"), billingHandler.Checkout)
 	protected.Post("/billing/change-plan", middleware.RequireRole("admin", "root"), billingHandler.ChangePlan)
 	protected.Post("/billing/cancel", middleware.RequireRole("admin", "root"), billingHandler.Cancel)
 
@@ -1211,6 +1214,9 @@ func main() {
 	protected.Post("/auth/switch-org", switchHandler.SwitchOrganization)
 
 	// --- Personal Access Tokens (L5) management — full session required ---
+	// Every PAT verb acts on the CALLER's own tokens (the service scopes by user
+	// id and Create refuses a PAT minting another PAT), so the session is the
+	// authorization — #529, bucket 1.
 	protected.Post("/auth/pat", patHandler.Create)
 	protected.Get("/auth/pat", patHandler.List)
 	protected.Delete("/auth/pat/:id", patHandler.Revoke)
@@ -1220,6 +1226,8 @@ func main() {
 	api.Get("/users/me", authHandler.GetProfile)
 
 	// Dashboard & Analytics (Read-Only accessible à tous les connectés)
+	// Tenant-wide counters, no per-entity disclosure, and every business role
+	// preset already holds risks:read — the session is the authorization (#529).
 	protected.Get("/stats", cacheableHandlers.CacheDashboardStatsGET(handlers.GetDashboardStats))
 
 	// --- Generalised ownership (responsable / exécutant / validateur) ---
@@ -1927,6 +1935,8 @@ func main() {
 	// the relevant module. The assistant/emerging endpoints use risks:read.
 	aiRiskRead := middleware.RequirePermission("risks:read")
 	aiComplianceRead := middleware.RequirePermission("compliance:read")
+	// Deployment capability only ("is an LLM wired in, and which"). No tenant
+	// data, no per-user data — session-sufficient (#529).
 	protected.Get("/ai/status", aiHandler.Status)
 	protected.Post("/ai/assistant/query", aiRiskRead, featAI, aiHandler.AssistantQuery)
 	protected.Post("/ai/emerging-risks", aiRiskRead, featAI, aiHandler.DetectEmergingRisks)
@@ -1965,6 +1975,9 @@ func main() {
 	protected.Patch("/users/:id/status", adminRole, handlers.UpdateUserStatus)
 	protected.Patch("/users/:id/role", adminRole, handlers.UpdateUserRole)
 	protected.Delete("/users/:id", adminRole, handlers.DeleteUser)
+	// Despite the ":id", this edits the CALLER's own profile: the handler reads
+	// claims.Sub and ignores the parameter, so it cannot touch another account.
+	// Session-sufficient (#529); the misleading path is issue #574.
 	protected.Patch("/users/:id", handlers.UpdateUserProfile)
 
 	// --- Team Management (Admin only) ---
@@ -1977,7 +1990,10 @@ func main() {
 	protected.Delete("/teams/:id/members/:userId", adminRole, handlers.RemoveTeamMember)
 
 	// --- Integration Testing (Protected routes) ---
-	protected.Post("/integrations/:id/test", handlers.TestIntegration)
+	// Fetches a caller-supplied URL from the server and reports the result, so
+	// it must not be reachable by every member (#529). The guard narrows who can
+	// aim it; issue #573 removes the arbitrary-URL shape itself.
+	protected.Post("/integrations/:id/test", middleware.RequireRole("admin", "root"), handlers.TestIntegration)
 
 	// --- Audit Logs (Admin only) ---
 	auditHandler := handlers.NewAuditLogHandler()
@@ -1989,6 +2005,8 @@ func main() {
 	// Tokens can be managed by any authenticated user for their own tokens
 	tokenHandler := handlers.NewTokenHandler(tokenService)
 
+	// API tokens are personal: every verb below loads the token and refuses when
+	// token.UserID is not the caller. The session is the authorization (#529).
 	protected.Post("/tokens", tokenHandler.CreateToken)
 	protected.Get("/tokens", tokenHandler.ListTokens)
 	protected.Get("/tokens/:id", tokenHandler.GetToken)
@@ -1999,17 +2017,29 @@ func main() {
 
 	// --- Custom Fields Management (Protected routes) ---
 	customFieldHandler := handlers.NewCustomFieldHandler()
-	protected.Post("/custom-fields", customFieldHandler.CreateCustomField)
+	// Reading the field definitions is what every risk and asset FORM does, so
+	// any member may. Defining them changes the tenant's schema for everyone —
+	// and deleting one drops the values already captured under it — which is an
+	// administrator's call (#529).
+	customFieldAdmin := middleware.RequireRole("admin", "root")
+	protected.Post("/custom-fields", customFieldAdmin, customFieldHandler.CreateCustomField)
 	protected.Get("/custom-fields", customFieldHandler.ListCustomFields)
 	protected.Get("/custom-fields/:id", customFieldHandler.GetCustomField)
-	protected.Patch("/custom-fields/:id", customFieldHandler.UpdateCustomField)
-	protected.Delete("/custom-fields/:id", customFieldHandler.DeleteCustomField)
+	protected.Patch("/custom-fields/:id", customFieldAdmin, customFieldHandler.UpdateCustomField)
+	protected.Delete("/custom-fields/:id", customFieldAdmin, customFieldHandler.DeleteCustomField)
 	protected.Get("/custom-fields/scope/:scope", customFieldHandler.ListCustomFieldsByScope)
-	protected.Post("/custom-fields/templates/:id/apply", customFieldHandler.ApplyTemplate)
+	protected.Post("/custom-fields/templates/:id/apply", customFieldAdmin, customFieldHandler.ApplyTemplate)
 
 	// --- Bulk Operations (Protected routes) ---
 	bulkOpHandler := handlers.NewBulkOperationHandler()
-	protected.Post("/bulk-operations", bulkOpHandler.CreateBulkOperation)
+	// A bulk job mutates the register wholesale. The middleware floor keeps
+	// read-only roles out entirely; the handler then demands the exact
+	// permission for the verb in the body (update/delete/export/assign), which
+	// middleware cannot see (#529).
+	protected.Post("/bulk-operations",
+		middleware.RequirePermission("risks:update", "risks:delete"),
+		bulkOpHandler.CreateBulkOperation)
+	// Job status for the caller's own jobs, tenant-scoped. Session-sufficient (#529).
 	protected.Get("/bulk-operations", bulkOpHandler.ListBulkOperations)
 	protected.Get("/bulk-operations/:id", bulkOpHandler.GetBulkOperation)
 
@@ -2114,7 +2144,7 @@ func main() {
 	incidentsGroup.Post("/:id/actions", incidentUpdate, incidentHandler.CreateIncidentAction)
 	incidentsGroup.Get("/:id/actions", incidentHandler.GetIncidentActions)
 	incidentsGroup.Put("/:id/actions/:actionId", incidentUpdate, incidentHandler.UpdateIncidentAction)
-	protected.Get("/risks/:id/incidents", incidentHandler.GetIncidentsForRisk)
+	protected.Get("/risks/:id/incidents", middleware.RequirePermission("risks:read"), incidentHandler.GetIncidentsForRisk)
 
 	// NOTE: the legacy /risk-management/* lifecycle subsystem (service +
 	// handler + duplicate RiskRegister/TreatmentPlan/… models) was removed. Its
@@ -2151,16 +2181,21 @@ func main() {
 	actionCenterHandler := handlers.NewActionCenterHandler(
 		actioncenterapp.NewUseCase(repository.NewActionCenterRepository(database.DB)),
 	)
+	// "What is waiting on ME" — the use case builds it from the caller's own
+	// assignments. Session-sufficient (#529).
 	protected.Get("/action-center", actionCenterHandler.GetActionCenter)
 
 	// --- Risk Timeline (Protected routes) ---
 	timelineHandler := handlers.NewRiskTimelineHandler()
-	protected.Get("/risks/:id/timeline", timelineHandler.GetRiskTimeline)
-	protected.Get("/risks/:id/timeline/status-changes", timelineHandler.GetStatusChanges)
-	protected.Get("/risks/:id/timeline/score-changes", timelineHandler.GetScoreChanges)
-	protected.Get("/risks/:id/timeline/trend", timelineHandler.GetRiskTrend)
-	protected.Get("/risks/:id/timeline/changes/:type", timelineHandler.GetChangesByType)
-	protected.Get("/risks/:id/timeline/since/:timestamp", timelineHandler.GetChangesSince)
+	// One risk's history is one risk's data: same permission as reading the risk
+	// itself, which every other /risks/* read already carries (#529).
+	riskTimelineRead := middleware.RequirePermission("risks:read")
+	protected.Get("/risks/:id/timeline", riskTimelineRead, timelineHandler.GetRiskTimeline)
+	protected.Get("/risks/:id/timeline/status-changes", riskTimelineRead, timelineHandler.GetStatusChanges)
+	protected.Get("/risks/:id/timeline/score-changes", riskTimelineRead, timelineHandler.GetScoreChanges)
+	protected.Get("/risks/:id/timeline/trend", riskTimelineRead, timelineHandler.GetRiskTrend)
+	protected.Get("/risks/:id/timeline/changes/:type", riskTimelineRead, timelineHandler.GetChangesByType)
+	protected.Get("/risks/:id/timeline/since/:timestamp", riskTimelineRead, timelineHandler.GetChangesSince)
 	// GET /timeline/recent is RETIRED (#412 criterion 16). It returned the risk
 	// history of every tenant in the deployment on 2026-07-23 (docs/JOURNAL.md
 	// item 36), and it still read its tenant through safeGetUUID, which falls
@@ -2206,6 +2241,10 @@ func main() {
 
 	// The tenant-wide feed and the catalogue are static paths and are mounted
 	// BEFORE /entities/:type/:id (the Fiber trap this codebase has hit before).
+	// The entity module authorises INSIDE the service: every read goes through
+	// Service.access(type) → the type's own read permission, relations are
+	// filtered by the target type's permission, and the audit tab additionally
+	// demands governance:audit:read. Handler-enforced, not unguarded (#529).
 	protected.Get("/timeline", entityHandler.GetTenantTimeline)
 	protected.Get("/entities", entityHandler.GetCatalogue)
 	// No RequirePermission middleware here on purpose: the required permission
@@ -2411,6 +2450,8 @@ func main() {
 	// for everyone who is not an administrator.
 	orgRead := middleware.RequirePermission("organization:read", "organization:members:read")
 	protected.Get("/organization", orgRead, memberHandler.GetOrganization)
+	// Headline member counts for the org switcher; no member identities.
+	// Session-sufficient (#529).
 	protected.Get("/organization/counts", memberHandler.GetCounts)
 
 	// STATIC SUB-PATHS BEFORE /:memberId — Fiber matches in registration order,
@@ -2450,6 +2491,8 @@ func main() {
 	// immediately and handed the administrator a temporary password to relay,
 	// with no token, no expiry, no revocation and no resend.
 	businessRoleHandler := handlers.NewBusinessRoleHandler()
+	// The static preset catalogue shipped with the product — the same list for
+	// every tenant, no data. Session-sufficient (#529).
 	protected.Get("/rbac/business-roles", businessRoleHandler.GetCatalog)
 
 	// =========================================================================
@@ -2705,6 +2748,9 @@ func main() {
 			// rather than a second one kept alive for this call site.
 			WithMembers(memberDirectory{repo: membershipRepo}),
 	)
+	// Results are filtered per type by the caller's own permissions (the `can`
+	// closure passed into the use case), so the guard is inside the handler and
+	// a bare permission on the route would be coarser, not safer (#529).
 	protected.Get("/search", searchHandler.Search)
 
 	// =========================================================================
@@ -2726,6 +2772,8 @@ func main() {
 	)
 	// Readable by any authenticated member: a posture score is what the product
 	// is FOR, and the underlying detail is already gated per source.
+	// Tenant-scoped score figures; every business role preset holds risks:read,
+	// and preview persists nothing. Session-sufficient (#529).
 	protected.Get("/score", scoreHandler.GetScore)
 	protected.Get("/score/model", scoreHandler.GetScoreModel)
 	// Live preview for forms (debounced client-side). Persists nothing, so it
@@ -2752,6 +2800,9 @@ func main() {
 	// Readable by any authenticated member: the get-started panel is not a
 	// privileged view, and gating it behind a permission would hide the product's
 	// own instructions from exactly the people who need them most.
+	// Activation and onboarding are per-user state: every handler resolves
+	// (tenant, user) from the session and takes no id from the request.
+	// Session-sufficient (#529).
 	protected.Get("/activation/state", activationHandler.GetActivationState)
 	protected.Post("/activation/celebrated", activationHandler.MarkCelebrated)
 
@@ -2971,7 +3022,11 @@ func main() {
 		governance.NewPruneAuditTrailUseCase(auditChainRepo, auditRetentionRepo), zeroLogger,
 	).Start(context.Background())
 
-	// Delegations — any authenticated member manages their own; static paths first.
+	// Delegations — any authenticated member manages their OWN, so no route
+	// guard; the authority checks live in the use cases and are the reason these
+	// stay unguarded rather than an omission (#529): CreateDelegation refuses a
+	// delegator other than the actor unless the actor is an org admin, and
+	// RevokeDelegation admits only the delegator, the delegate or an admin.
 	protected.Get("/governance/delegations/effective", governanceHandler.EffectiveDelegatedPermissions)
 	protected.Get("/governance/delegations", governanceHandler.ListDelegations)
 	protected.Post("/governance/delegations", governanceHandler.CreateDelegation)
@@ -2984,7 +3039,10 @@ func main() {
 	protected.Put("/governance/workflows/:id", governanceAdmin, governanceHandler.UpdateWorkflow)
 	protected.Delete("/governance/workflows/:id", governanceAdmin, governanceHandler.DeleteWorkflow)
 
-	// Approval requests (the Maker-Checker inbox) — any authenticated member.
+	// Approval requests (the Maker-Checker inbox) — any authenticated member,
+	// because who may act is a property of the REQUEST, not of the route:
+	// domain.CanSign checks the caller against the workflow step, and cancel is
+	// refused to anyone but the requester. Handler-enforced (#529).
 	protected.Get("/governance/approvals", governanceHandler.ListApprovals)
 	protected.Post("/governance/approvals", governanceHandler.SubmitApproval)
 	protected.Get("/governance/approvals/:id", governanceHandler.GetApproval)
