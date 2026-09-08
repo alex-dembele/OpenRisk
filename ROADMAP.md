@@ -510,6 +510,51 @@ financière + un plan de traitement suggéré ». Une branche par phase, commits
     requête : `TestNoStaleDecisions` n'accepte que les routes paramétrées et les lectures de
     collection. C'est l'angle mort que le commentaire du paquet décrit lui-même ; la sonde
     manuelle qu'il réclame existe (les deux tests cross-tenant), mais elle n'est pas enregistrée.
+- [x] **W1-05c — Actions en masse gouvernées : vulnérabilités et actifs** (#582, enfant C de
+  l'épique #235, séquencé après #581, gaté transitivement par **D-036**).
+  **Périmètre réellement livré : C1**, pas les six registres annoncés par l'intitulé de l'issue.
+  Deux des six ne sont pas ce que l'issue suppose, et c'est vérifié : « governance » recouvre
+  quatre tables dont **`audit-trail`**, que `internal/domain/governance.go:96` déclare immuable et
+  chaînée par tenant (`Sequence`/`PrevHash`/`Hash`) — y écrire une mutation en masse casserait la
+  chaîne et ferait échouer toute vérification ultérieure ; « settings » est la table des jetons
+  d'API, sur laquelle seul `delete` a un sens. Les quatre registres restants ne sont pas
+  uniformes non plus (`Incident.TenantID` est un `string`, `Mitigation.AssignedTo` est un
+  `UUIDArray`, `Asset` et `Vulnerability` portent `Criticality` et non `Status`). Le détail et le
+  découpage C1/C2/C3 sont dans le commentaire d'ouverture de #582.
+  **Mécanisme partagé** (il n'existait pas) : `internal/domain/bulk.go` définit le port,
+  `internal/application/bulk/engine.go` le moteur **transactionnel et audité** avec **aperçu
+  d'impact non mutant**, `internal/infrastructure/repository/gorm_bulk_stores.go` les magasins
+  vulnérabilités et actifs. Une entrée d'audit par ligne modifiée, portant l'acteur, le
+  before → after et le motif saisi. Tout ou rien (D-036).
+  **L'aperçu est la moitié qui manquait à #581.** `POST /<registre>/bulk/preview` répond
+  `{requested, found, missing, affected, unchanged, sample, fingerprint}` sans rien écrire, et
+  l'`apply` renvoie l'empreinte : une sélection qui a bougé entre l'aperçu et la confirmation est
+  **refusée en 409**, pas appliquée à des lignes que l'utilisateur n'a jamais vues (critère 3).
+  **Une action = une route = une permission.** L'action vient de la route et non du corps, donc
+  `change-status` est derrière `<module>:update` et `delete` derrière `<module>:delete` ; lire
+  l'action dans le corps aurait laissé un porteur du droit `update` poster `{"action":"delete"}`.
+  `GET /<registre>/bulk/capabilities` dit ce que le registre sait faire — les actifs n'exposent
+  que `delete`, faute de `Status` — de sorte que l'UI n'offre rien que le serveur refuserait.
+  **Frontend** : `src/shared/bulk/` (machine à états `useGovernedBulk` + `BulkPreviewDialog`) et
+  `src/services/bulkService.ts`, branchés sur la barre d'actions existante de
+  `shared/datatable/`. `VulnerabilitiesPage` et `InventoryPage` **ne bouclent plus** une requête
+  par ligne : elles envoyaient N appels non atomiques et non attribuables. Mise à jour optimiste
+  avec restauration à l'identique en cas de refus (RÈGLES ABSOLUES 8, 9 et 10) ; chaînes FR + EN
+  dans `src/locales`.
+  **Tests** : `engine_test.go` (moteur, aperçu, isolation cross-tenant), `gorm_bulk_stores_test.go`
+  (garanties du magasin contre du vrai SQL), et `src/shared/bulk/__tests__/governedBulk.test.tsx`
+  (20 tests — aperçu non contournable, refus 409/404, restauration optimiste octet pour octet,
+  capacités serveur, états de chargement/erreur/vide, axe-core sans violation serious/critical).
+  **Reste à faire**
+  - **C2 (mitigations, incidents) et C3 (jetons d'API) ne sont pas livrés**, et la piste d'audit
+    de gouvernance est **abandonnée avec motif** (immuable par conception).
+  - Ligne dans `docs/MARKETING_CLAIM_MATRIX.md` : **non ajoutée**, statut `VERIFIED` réservé à
+    `product-verifier` via `/verify-claims`.
+  - Aucune exécution contre un backend vivant : les tests dépôt tournent sur SQLite en mémoire.
+  - La traversée clavier réelle du dialogue n'est pas prouvée en jsdom : le piège de focus partagé
+    filtre sur `offsetParent`, que jsdom rapporte toujours `null`. Ce qui est prouvé en unitaire,
+    c'est que les deux réponses restent dans l'ordre de tabulation et que la confirmation
+    s'active au clavier ; la traversée appartient à la suite Playwright.
 - [x] **W1-03 — Action Center contextuel** (épique #201, scindée en #429 backend / #430 frontend).
   **Backend livré** (#429, branche `429-feat-build-the-action-center-aggregation-api-backend`) :
   `GET /api/v1/action-center` — agrégation **en lecture seule** de six sources existantes (mitigation en
