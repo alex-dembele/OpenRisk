@@ -457,6 +457,47 @@ financière + un plan de traitement suggéré ». Une branche par phase, commits
 11. **Billing & Plans (17.2)** + conversion (Partie C) + **Onboarding (17.6)** + **Super Admin (17.4)**.
 
 **Bloc W1 — Wave 1, fondations produit**
+- [x] **W1-05a — Vues de tableau enregistrées : persistées côté serveur et partageables** (#580,
+  enfant A de l'épique #235, indépendant des deux autres).
+  Une vue enregistrée vivait dans le `localStorage` du navigateur de son auteur
+  (`useTableState.ts:228,237` avant correction) : un responsable des risques qui avait construit
+  la bonne vue du registre pour son comité ne pouvait la donner à personne, et
+  `grep -rni "saved_view|savedview|table_view|column_pref"` sur `backend/` ne renvoyait **rien** —
+  ni table, ni API, ni partage. Le type `SavedView` était une forme cliente et rien d'autre.
+  **Livré** : `internal/domain/saved_view.go` (entité + `SavedViewVisibility` `personal`/`shared`),
+  quatre cas d'usage un fichier chacun dans `internal/application/savedview/`
+  (`create_`, `list_`, `update_`, `delete_saved_view.go`),
+  `internal/infrastructure/repository/gorm_saved_view_repository.go` et
+  `internal/handler/saved_view_handler.go`, montés en
+  `GET`/`POST /api/v1/saved-views` et `PATCH`/`DELETE /api/v1/saved-views/:id`
+  (`cmd/server/main.go:1779-1782`).
+  **Isolation (RÈGLE ABSOLUE 2)** : `tenant_id` est dans le `WHERE` de **chacune** des requêtes du
+  dépôt, y compris la garde d'unicité `(tenant_id, user_id, table_id, name)` ; le fichier le dit
+  en tête et le prouve ligne à ligne. Le partage est **intra-tenant uniquement**, conformément au
+  Scope OUT de l'épique. Une vue `shared` est lisible par le tenant, modifiable par son
+  propriétaire ou un admin du tenant, et attribuée à son auteur dans l'interface.
+  **Front** : `src/services/savedViewService.ts` (schéma Zod côté client, RÈGLE 11) et la
+  migration unique `localStorage` → serveur dans `useTableState.ts:266` — la copie locale n'est
+  effacée qu'**après** que toutes les vues ont été acceptées par le serveur ; un échec n'est pas
+  fatal, les vues restent locales et la migration est retentée.
+  **Tests** : `internal/application/savedview/saved_view_test.go` (9), 
+  `internal/infrastructure/repository/gorm_saved_view_repository_test.go` (7, SQLite réel) et
+  `frontend/src/shared/datatable/__tests__/savedViews.test.tsx` (15 — dont la migration locale,
+  la charge locale corrompue ignorée, le refus d'un nom sans lettre ni chiffre, le refus au-delà
+  de 120 caractères, la vue partagée d'un collègue en lecture seule, et trois passes axe-core
+  sans violation serious/critical). Vérifiés le 2026-09-08 dans la suite front complète :
+  47 fichiers, 516 tests, tous verts.
+  **Reste à faire**
+  - **Aucune migration SQL versionnée.** La table `saved_views` est créée par l'`AutoMigrate` de
+    GORM (`cmd/server/main.go:378`) et non par un fichier de `migrations/`. C'est le mécanisme
+    déjà en place pour les autres entités, mais cela signifie qu'il n'existe pas de `down` et que
+    la table n'apparaît pas dans l'historique `golang-migrate`.
+  - **La disposition des colonnes reste locale, par choix.** `ColumnPrefs` continue de vivre dans
+    le `localStorage` (`useTableState.ts:15`, `ColumnsMenu.tsx:4`) : c'est une préférence par
+    utilisateur **et par navigateur**, pas un artefact partageable. Le Gap 1 de #235 est donc
+    clos pour les vues, ouvert par décision pour les colonnes.
+  - Ligne dans `docs/MARKETING_CLAIM_MATRIX.md` : **non ajoutée**, statut `VERIFIED` réservé à
+    `product-verifier` via `/verify-claims`.
 - [x] **W1-05b — Actions en masse du registre : transactionnelles, auditées, complètes** (#581,
   enfant B de l'épique #235, débloqué par **D-036**).
   `POST /api/v1/risks/bulk` appliquait ce qu'il pouvait, item par item, sans transaction, et
