@@ -457,6 +457,32 @@ financière + un plan de traitement suggéré ». Une branche par phase, commits
 11. **Billing & Plans (17.2)** + conversion (Partie C) + **Onboarding (17.6)** + **Super Admin (17.4)**.
 
 **Bloc W1 — Wave 1, fondations produit**
+- [ ] **W1-05 — Tableaux d'entreprise, vues enregistrées et actions en masse gouvernées**
+  (épique #235, enfants #580 / #581 / #582, tous **fermés par merge**).
+  Le composant de tableau, la virtualisation, le tri et la pagination serveur, les facettes
+  dans l'URL, la sélection page-vs-N-résultats, l'export CSV et la navigation clavier ont été
+  livrés en août (`frontend/src/shared/datatable/`, 2374 lignes, `docs/JOURNAL.md:119-129`).
+  Wave 1 a livré les trois manques qui restaient : les vues enregistrées côté serveur (W1-05a),
+  les actions en masse transactionnelles et auditées sur les risques (W1-05b), et le mécanisme
+  partagé d'aperçu + application gouvernée, appliqué aux vulnérabilités et aux actifs (W1-05c).
+  **Reste ouvert — l'épique n'est pas close.** Trois choses, dont une bloquante :
+  - **Le registre des risques n'utilise pas l'endpoint gouverné qu'il possède** (#598).
+    `POST /api/v1/risks/bulk` est transactionnel, audité et monté
+    (`cmd/server/main.go:1365`), mais `RiskRegisterPage.tsx:489-506` supprime toujours **une
+    requête par ligne** (`await Promise.all(ids.map((id) => deleteRisk(id)))`), et la mutation
+    `useRisks.ts:131` qui appelle l'endpoint n'a **aucun appelant**. Côté serveur la garantie
+    existe ; depuis le siège de l'utilisateur elle n'est pas atteignable. Tant que #598 n'est
+    pas livré, « actions en masse gouvernées sur le registre des risques » ne peut pas être
+    déclaré livré (RÈGLE ABSOLUE 12).
+  - **Quatre registres sur sept n'ont pas d'actions en masse** : mitigations et incidents (C2),
+    jetons d'API (C3), et la piste d'audit de gouvernance **abandonnée avec motif** — elle est
+    immuable et chaînée par tenant (`internal/domain/governance.go:96`), y écrire en masse
+    casserait la chaîne. C2 et C3 n'ont pas encore d'issue.
+  - **`docs/MARKETING_CLAIM_MATRIX.md` n'est pas à jour** pour les trois enfants : statut
+    `VERIFIED` réservé à `product-verifier` via `/verify-claims`.
+  Le reste de la dette de vérification de l'épique (Gap 3, `docs/JOURNAL.md:129`) a été
+  **apurée le 2026-09-08** par #583 : chaîne Go passée, suite E2E exécutée pour la première
+  fois (270 cas, 197 verts), 62 échecs déposés en #587 → #596.
 - [x] **W1-05a — Vues de tableau enregistrées : persistées côté serveur et partageables** (#580,
   enfant A de l'épique #235, indépendant des deux autres).
   Une vue enregistrée vivait dans le `localStorage` du navigateur de son auteur
