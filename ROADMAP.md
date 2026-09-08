@@ -477,7 +477,12 @@ financière + un plan de traitement suggéré ». Une branche par phase, commits
   - **Quatre registres sur sept n'ont pas d'actions en masse** : mitigations et incidents (C2),
     jetons d'API (C3), et la piste d'audit de gouvernance **abandonnée avec motif** — elle est
     immuable et chaînée par tenant (`internal/domain/governance.go:96`), y écrire en masse
-    casserait la chaîne. C2 et C3 n'ont pas encore d'issue.
+    casserait la chaîne. C2 et C3 sont désormais déposés en **#600**.
+  - **Le registre des risques n'a pas d'aperçu d'impact** (#599). `/risks/bulk` est une route
+    unique dont l'action vient du **corps** de la requête, alors que #582 a délibérément
+    abandonné cette forme (un porteur de `risks:update` pouvait poster une action `delete`) ;
+    vulnérabilités et actifs ont `capabilities`, `preview`, et une route par action derrière sa
+    propre permission. L'aperçu est ce que #582 appelle « la moitié qui manquait à #581 ».
   - **`docs/MARKETING_CLAIM_MATRIX.md` n'est pas à jour** pour les trois enfants : statut
     `VERIFIED` réservé à `product-verifier` via `/verify-claims`.
   Le reste de la dette de vérification de l'épique (Gap 3, `docs/JOURNAL.md:129`) a été
