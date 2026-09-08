@@ -50,6 +50,7 @@ import { relTime } from '../risks/riskMap';
 import { AttributeSearchBar } from '../attackSurface/AttributeSearchBar';
 import { CATEGORY_LABELS, type AssetCategory } from '../attackSurface/schemaTypes';
 import type { Asset } from '../../types/asset';
+import { BulkPreviewDialog, useGovernedBulk, type BulkChangeInput } from '../../shared/bulk';
 
 const TYPE_ICON: Record<string, LucideIcon> = {
   Server: Server,
@@ -84,6 +85,23 @@ const CRIT_LABEL_EN: Record<string, string> = {
   medium: 'Medium',
   low: 'Low',
 };
+/**
+ * The pending change, applied to the cached inventory (ABSOLUTE RULE 10).
+ * Restored verbatim by the hook if the server refuses — criterion 8.
+ *
+ * The ['assets'] prefix also caches each asset's history, which is not an array
+ * of assets; anything that is not the inventory is handed back untouched.
+ * Assets support delete alone, so there is no second branch to write.
+ */
+function patchInventory(cached: unknown, ids: ReadonlySet<string>, change: BulkChangeInput): unknown {
+  if (change.action !== 'delete' || !isAssetList(cached)) return cached;
+  return cached.filter((a) => !ids.has(a.id as string));
+}
+
+function isAssetList(cached: unknown): cached is Asset[] {
+  return Array.isArray(cached) && cached.every((a) => typeof a === 'object' && a !== null && 'id' in a);
+}
+
 const t = (lang: 'fr' | 'en', fr: string, en: string) => (lang === 'fr' ? fr : en);
 
 export function InventoryPage() {
@@ -277,6 +295,18 @@ export function InventoryPage() {
     [lang, canUpdate, canDelete],
   );
 
+  // Governed (#582): preview → confirm → one transactional, audited request.
+  // Previously this fanned the selection out into one DELETE per row, which was
+  // neither atomic nor attributable.
+  const bulk = useGovernedBulk({
+    register: 'assets',
+    optimistic: { queryKey: ['assets'], apply: patchInventory },
+    onApplied: (result) => {
+      const n = result.applied ?? 0;
+      toast.success(t(lang, `${n} actif(s) supprimé(s)`, `${n} asset(s) deleted`));
+    },
+  });
+
   const bulkActions: BulkAction<Asset>[] = useMemo(
     () => [
       {
@@ -284,17 +314,14 @@ export function InventoryPage() {
         label: t(lang, 'Supprimer', 'Delete'),
         icon: Trash2,
         danger: true,
-        hidden: !canDelete,
+        // The permission the user holds AND what the server says this register
+        // can do. Enforcement is the route middleware, not either of these.
+        hidden: !canDelete || !bulk.supports('delete'),
         selectionOnly: true,
-        run: async ({ ids }) => {
-          await Promise.all(ids.map((id) => deleteAsset.mutateAsync(id)));
-          toast.success(
-            t(lang, `${ids.length} actif(s) supprimé(s)`, `${ids.length} asset(s) deleted`),
-          );
-        },
+        run: ({ ids }) => bulk.request({ action: 'delete' }, ids),
       },
     ],
-    [lang, canDelete, deleteAsset],
+    [lang, canDelete, bulk],
   );
 
   const confirmDelete = async () => {
@@ -399,6 +426,8 @@ export function InventoryPage() {
         }}
       />
       <AssetHistoryDrawer assetId={historyAssetId} onClose={() => setHistoryAssetId(null)} />
+
+      <BulkPreviewDialog bulk={bulk} entityLabel={tr('actifs', 'assets')} />
 
       <ImpactDialog
         open={!!toDelete}
