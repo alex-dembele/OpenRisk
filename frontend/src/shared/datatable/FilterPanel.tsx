@@ -10,7 +10,7 @@
 // named saved views.
 
 import { useCallback, useState } from 'react';
-import { Check, Filter, RotateCcw, Star, Trash2, X } from 'lucide-react';
+import { AlertCircle, Check, Filter, Lock, RotateCcw, Star, Trash2, Users, X } from 'lucide-react';
 import {
   FloatingFocusManager,
   FloatingPortal,
@@ -25,8 +25,10 @@ import {
   useInteractions,
   useRole,
 } from '@floating-ui/react';
-import type { Facet, SavedView, TableState } from './types';
-import type { TableStateApi } from './useTableState';
+import { interpolate } from '../../hooks/useI18n';
+import { savedViewFormSchema } from '../../services/savedViewService';
+import type { Facet, SavedView, SavedViewVisibility, TableState } from './types';
+import type { SavedViewsStatus, TableStateApi } from './useTableState';
 
 interface FilterPanelProps<T> {
   facets: Facet<T>[];
@@ -34,9 +36,48 @@ interface FilterPanelProps<T> {
   /** Rows matching the current filter — shown live on the panel. */
   resultCount: number;
   views: SavedView[];
-  onSaveView: (name: string, state: SavedView['state']) => void;
+  /** Loading / error / ready — all three are rendered, none is swallowed. */
+  viewsStatus: SavedViewsStatus;
+  /** A save, share or delete that did not stick. Shown, never silent. */
+  viewsMutationError: boolean;
+  /** Whether the signed-in user is a tenant admin (may edit a shared view they do not own). */
+  canEditOthersViews: boolean;
+  onSaveView: (
+    name: string,
+    state: SavedView['state'],
+    visibility: SavedViewVisibility,
+  ) => void;
   onDeleteView: (id: string) => void;
+  onSetViewVisibility: (id: string, visibility: SavedViewVisibility) => void;
+  onRetryViews: () => void;
   labels: FilterLabels;
+}
+
+/** The saved-view strings, from /src/locales (savedViews.*). */
+export interface SavedViewLabels {
+  error: string;
+  retry: string;
+  empty: string;
+  emptyHint: string;
+  share: string;
+  sharedBadge: string;
+  sharedBy: string;
+  makeShared: string;
+  makePersonal: string;
+  mutationError: string;
+  nameRequired: string;
+  nameTooLong: string;
+  nameUnreadable: string;
+}
+
+/**
+ * Map a Zod issue code to the localised sentence. The schema carries stable
+ * keys rather than prose precisely so the copy lives in the locale files.
+ */
+function nameErrorMessage(code: string, labels: FilterLabels): string {
+  if (code === 'tooLong') return labels.saved.nameTooLong;
+  if (code === 'unreadable') return labels.saved.nameUnreadable;
+  return labels.saved.nameRequired;
 }
 
 export interface FilterLabels {
@@ -50,6 +91,7 @@ export interface FilterLabels {
   close: string;
   apply: string;
   delete: string;
+  saved: SavedViewLabels;
 }
 
 export function FilterPanel<T>({
@@ -57,12 +99,19 @@ export function FilterPanel<T>({
   api,
   resultCount,
   views,
+  viewsStatus,
+  viewsMutationError,
+  canEditOthersViews,
   onSaveView,
   onDeleteView,
+  onSetViewVisibility,
+  onRetryViews,
   labels,
 }: FilterPanelProps<T>) {
   const [open, setOpen] = useState(false);
   const [viewName, setViewName] = useState('');
+  const [shareNewView, setShareNewView] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   const {
     refs: anchor,
@@ -207,71 +256,229 @@ export function FilterPanel<T>({
                 })}
               </div>
 
-              {/* Saved views — a named filter combination the user can come back to. */}
+              {/* Saved views — a named filter combination the user can come back to,
+                  and (since #580) hand to their whole organisation. All three UI
+                  states are rendered: loading, error, empty. */}
               <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
                 <div className="text-[11px] font-semibold uppercase tracking-[.04em] text-ink-muted mb-2 flex items-center gap-1.5">
                   <Star size={12} /> {labels.savedViews}
                 </div>
-                {views.length > 0 && (
-                  <div className="space-y-1 mb-2">
-                    {views.map((v) => (
-                      <div key={v.id} className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          data-testid={`saved-view-${v.name}`}
-                          onClick={() => {
-                            api.apply(v.state);
-                            setOpen(false);
-                          }}
-                          className="flex-1 text-left h-8 px-2.5 rounded-[8px] text-[12.5px] font-medium text-ink hover:bg-hover transition-colors"
-                        >
-                          {v.name}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteView(v.id)}
-                          aria-label={`${labels.delete} ${v.name}`}
-                          className="w-8 h-8 rounded-[8px] inline-flex items-center justify-center text-ink-muted hover:bg-hover"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+
+                {/* Loading — a skeleton, never a spinner. */}
+                {viewsStatus === 'loading' && (
+                  <div className="space-y-1 mb-2" data-testid="saved-views-loading" aria-hidden>
+                    {[0, 1].map((i) => (
+                      <div
+                        key={i}
+                        className="h-8 rounded-[8px] or-skeleton"
+                        style={{ background: 'var(--bg-secondary)' }}
+                      />
                     ))}
                   </div>
                 )}
+
+                {/* Error — the register itself is already on screen with its
+                    default filters (criterion 7); only this strip failed, and it
+                    offers a way back rather than a dead end. */}
+                {viewsStatus === 'error' && (
+                  <div
+                    className="mb-2 flex items-start gap-2"
+                    role="status"
+                    data-testid="saved-views-error"
+                  >
+                    <AlertCircle size={14} style={{ color: 'var(--danger)' }} className="mt-[2px]" />
+                    <div className="flex-1">
+                      <p className="text-[11.5px] text-ink-muted">{labels.saved.error}</p>
+                      <button
+                        type="button"
+                        onClick={onRetryViews}
+                        data-testid="saved-views-retry"
+                        className="mt-1 text-[11.5px] font-semibold hover:underline"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        {labels.saved.retry}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty — reads as "none yet", not as a failure (criterion 8). */}
+                {viewsStatus === 'ready' && views.length === 0 && (
+                  <div className="mb-2" data-testid="saved-views-empty">
+                    <p className="text-[12px] text-ink">{labels.saved.empty}</p>
+                    <p className="text-[11px] text-ink-muted mt-0.5">{labels.saved.emptyHint}</p>
+                  </div>
+                )}
+
+                {viewsStatus === 'ready' && views.length > 0 && (
+                  <ul className="space-y-1 mb-2" data-testid="saved-views-list">
+                    {views.map((v) => {
+                      const editable = v.isOwn || canEditOthersViews;
+                      return (
+                        <li key={v.id} className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            data-testid={`saved-view-${v.name}`}
+                            onClick={() => {
+                              api.apply(v.state);
+                              setOpen(false);
+                            }}
+                            className="flex-1 min-w-0 text-left h-8 px-2.5 rounded-[8px] text-[12.5px] font-medium text-ink hover:bg-hover transition-colors"
+                          >
+                            <span className="block truncate">{v.name}</span>
+                            {!v.isOwn && v.ownerEmail && (
+                              <span className="block truncate text-[10.5px] text-ink-muted">
+                                {interpolate(labels.saved.sharedBy, { email: v.ownerEmail })}
+                              </span>
+                            )}
+                          </button>
+
+                          {/* Sharing is a toggle on the row, not a hidden setting:
+                              whether the committee can see this view is the whole
+                              point of saving it server-side. */}
+                          {editable ? (
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={v.visibility === 'shared'}
+                              aria-label={
+                                v.visibility === 'shared'
+                                  ? labels.saved.makePersonal
+                                  : labels.saved.makeShared
+                              }
+                              title={
+                                v.visibility === 'shared'
+                                  ? labels.saved.makePersonal
+                                  : labels.saved.makeShared
+                              }
+                              data-testid={`saved-view-share-${v.name}`}
+                              onClick={() =>
+                                onSetViewVisibility(
+                                  v.id,
+                                  v.visibility === 'shared' ? 'personal' : 'shared',
+                                )
+                              }
+                              className="w-8 h-8 rounded-[8px] inline-flex items-center justify-center hover:bg-hover"
+                              style={{
+                                color:
+                                  v.visibility === 'shared' ? 'var(--accent)' : 'var(--fg-muted)',
+                              }}
+                            >
+                              {v.visibility === 'shared' ? <Users size={14} /> : <Lock size={14} />}
+                            </button>
+                          ) : (
+                            <span
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
+                              style={{ background: 'var(--accent-soft)', color: 'var(--accent-500)' }}
+                            >
+                              {labels.saved.sharedBadge}
+                            </span>
+                          )}
+
+                          {editable && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteView(v.id)}
+                              aria-label={`${labels.delete} ${v.name}`}
+                              className="w-8 h-8 rounded-[8px] inline-flex items-center justify-center text-ink-muted hover:bg-hover"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
                 <form
-                  className="flex gap-1.5"
+                  className="space-y-1.5"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    const name = viewName.trim();
-                    if (!name || !canSaveView) return;
-                    onSaveView(name, {
-                      q: api.state.q,
-                      filters: api.state.filters,
-                      sort: api.state.sort,
+                    if (!canSaveView) return;
+                    // Zod is the only gate on this form — the button's disabled
+                    // state is an affordance, not a validator.
+                    const parsed = savedViewFormSchema.safeParse({
+                      name: viewName,
+                      visibility: shareNewView ? 'shared' : 'personal',
                     });
+                    if (!parsed.success) {
+                      setNameError(parsed.error.issues[0]?.message ?? 'required');
+                      return;
+                    }
+                    setNameError(null);
+                    onSaveView(
+                      parsed.data.name,
+                      { q: api.state.q, filters: api.state.filters, sort: api.state.sort },
+                      parsed.data.visibility,
+                    );
                     setViewName('');
+                    setShareNewView(false);
                   }}
                 >
-                  <input
-                    value={viewName}
-                    onChange={(e) => setViewName(e.target.value)}
-                    placeholder={labels.viewNamePlaceholder}
-                    aria-label={labels.viewNamePlaceholder}
-                    data-testid="saved-view-name"
-                    className="flex-1 h-8 px-2.5 rounded-[8px] text-[12.5px] text-ink outline-none"
-                    style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!canSaveView || !viewName.trim()}
-                    data-testid="saved-view-save"
-                    className="h-8 px-2.5 rounded-[8px] text-[12px] font-semibold disabled:opacity-40"
-                    style={{ background: 'var(--accent-soft)', color: 'var(--accent-500)' }}
-                  >
-                    {labels.save}
-                  </button>
+                  <div className="flex gap-1.5">
+                    <input
+                      value={viewName}
+                      onChange={(e) => {
+                        setViewName(e.target.value);
+                        if (nameError) setNameError(null);
+                      }}
+                      placeholder={labels.viewNamePlaceholder}
+                      aria-label={labels.viewNamePlaceholder}
+                      aria-invalid={nameError ? true : undefined}
+                      aria-describedby={nameError ? 'saved-view-name-error' : undefined}
+                      data-testid="saved-view-name"
+                      className="flex-1 h-8 px-2.5 rounded-[8px] text-[12.5px] text-ink outline-none"
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        border: `1px solid ${nameError ? 'var(--danger)' : 'var(--border)'}`,
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!canSaveView || !viewName.trim()}
+                      data-testid="saved-view-save"
+                      className="h-8 px-2.5 rounded-[8px] text-[12px] font-semibold disabled:opacity-40"
+                      style={{ background: 'var(--accent-soft)', color: 'var(--accent-500)' }}
+                    >
+                      {labels.save}
+                    </button>
+                  </div>
+
+                  {nameError && (
+                    <p
+                      id="saved-view-name-error"
+                      role="alert"
+                      className="text-[11px]"
+                      style={{ color: 'var(--danger)' }}
+                      data-testid="saved-view-name-error"
+                    >
+                      {nameErrorMessage(nameError, labels)}
+                    </p>
+                  )}
+
+                  <label className="flex items-center gap-1.5 text-[11.5px] text-ink-muted cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={shareNewView}
+                      onChange={(e) => setShareNewView(e.target.checked)}
+                      data-testid="saved-view-share-new"
+                    />
+                    {labels.saved.share}
+                  </label>
                 </form>
+
+                {viewsMutationError && (
+                  <p
+                    role="alert"
+                    data-testid="saved-views-mutation-error"
+                    className="text-[11px] mt-1.5"
+                    style={{ color: 'var(--danger)' }}
+                  >
+                    {labels.saved.mutationError}
+                  </p>
+                )}
+
                 {!canSaveView && (
                   <p className="text-[11px] text-ink-muted mt-1.5">{labels.saveCurrent}</p>
                 )}

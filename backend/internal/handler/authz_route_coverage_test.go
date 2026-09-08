@@ -56,6 +56,27 @@ import (
 // This list may only SHRINK. Adding to it requires a reviewer to agree that the
 // session alone is sufficient authorization for that route.
 var routesWithoutPermissionGuard = []string{
+	// #580 — saved table views. No RequirePermission, and the reason is that no
+	// existing permission fits: the resource is shared by all seven registers
+	// (risks, vulnerabilities, assets, mitigations, incidents, governance,
+	// settings), so gating it on any one module's `:read` would either lock a
+	// user out of naming a view of a register they CAN read, or grant them views
+	// of one they cannot. A saved view also confers no access of its own —
+	// applying one re-runs the register's own query under the caller's own
+	// permissions, so the rows a user sees are unchanged either way.
+	//
+	// What the routes do enforce, on every call, is identity: tenant_id and
+	// user_id come from the signed session (handler.savedViewCaller), never from
+	// the body or the query string. Cross-tenant and other users' personal views
+	// answer 404, proven in application/savedview and
+	// repository/gorm_saved_view_repository_test.
+	//
+	// NEEDS A REVIEWER'S AGREEMENT per this list's contract.
+	"DELETE /saved-views/:id",
+	"GET /saved-views",
+	"PATCH /saved-views/:id",
+	"POST /saved-views",
+
 	"DELETE /auth/pat/:id",
 	"DELETE /auth/sessions/:id",
 	"DELETE /auth/sessions/others",

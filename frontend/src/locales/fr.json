@@ -357,6 +357,23 @@
       "unknown": "Action requise"
     }
   },
+  "savedViews": {
+    "loading": "Chargement de vos vues…",
+    "error": "Impossible de charger vos vues sauvegardées.",
+    "retry": "Réessayer",
+    "empty": "Aucune vue sauvegardée pour l'instant.",
+    "emptyHint": "Filtrez le registre, nommez la vue : vous la retrouverez à votre prochaine visite.",
+    "share": "Partager avec mon organisation",
+    "shareHint": "Toute votre organisation verra cette vue.",
+    "sharedBadge": "Partagée",
+    "sharedBy": "Partagée par {email}",
+    "makeShared": "Partager cette vue",
+    "makePersonal": "Rendre cette vue personnelle",
+    "mutationError": "Cette modification n'a pas pu être enregistrée. Réessayez.",
+    "nameRequired": "Nommez cette vue.",
+    "nameTooLong": "120 caractères maximum.",
+    "nameUnreadable": "Utilisez au moins une lettre ou un chiffre."
+  },
   "bulk": {
     "title": {
       "delete": "Supprimer {n} {entity} ?",

@@ -53,6 +53,7 @@ import (
 	appreport "github.com/opendefender/openrisk/internal/application/report"
 	"github.com/opendefender/openrisk/internal/application/reportjob"
 	"github.com/opendefender/openrisk/internal/application/risk"
+	savedviewapp "github.com/opendefender/openrisk/internal/application/savedview"
 	scanapp "github.com/opendefender/openrisk/internal/application/scanner"
 	searchapp "github.com/opendefender/openrisk/internal/application/search"
 	vulnapp "github.com/opendefender/openrisk/internal/application/vulnerability"
@@ -369,6 +370,12 @@ func main() {
 		// reconnects replay what it missed instead of refetching everything, and
 		// it is where the ordering guarantee lives (unique tenant_id+sequence).
 		&domain.RealtimeEvent{},
+		// Saved table views (#580): the named filter/sort/column combinations a
+		// user keeps for a register and may share with their tenant. Purely
+		// additive — a new table, no column dropped or renamed — which is why it
+		// arrives through AutoMigrate alone and carries no .sql file (see
+		// internal/migrations/migrator.go:64-66 on which layer owns the schema).
+		&domain.SavedView{},
 	); err != nil {
 		log.Fatalf("Database Migration Failed: %v", err)
 	}
@@ -1749,6 +1756,30 @@ func main() {
 	protected.Get("/attack-surface/schemas/:category", assetRead, assetSchemaHandler.GetSchema)
 	protected.Put("/attack-surface/schemas/:category", adminOnly, assetSchemaHandler.UpdateSchema)
 	protected.Post("/attack-surface/schemas/:category/reset", adminOnly, assetSchemaHandler.ResetSchema)
+
+	// Saved table views (#580). Cross-cutting: the SAME resource backs all seven
+	// registers (risks, vulnerabilities, assets, mitigations, incidents,
+	// governance, settings), keyed by the table_id the frontend DataTable is
+	// mounted with.
+	//
+	// No RBAC middleware, deliberately. No single "<module>:read" permission fits
+	// a resource shared by seven registers, and a saved view grants access to
+	// nothing — applying one still runs the register's own query under the
+	// caller's own permissions. What IS enforced on every call is the tenant and
+	// user identity taken from the signed session: a view of another tenant reads
+	// back 404, identical to a fabricated id, because a 403 would confirm it
+	// exists and its filter values name that institution's assets and people.
+	savedViewRepo := repository.NewGormSavedViewRepository(database.DB)
+	savedViewHandler := handlers.NewSavedViewHandler(
+		savedviewapp.NewListSavedViewsUseCase(savedViewRepo).WithUserLookup(userRepo),
+		savedviewapp.NewCreateSavedViewUseCase(savedViewRepo),
+		savedviewapp.NewUpdateSavedViewUseCase(savedViewRepo),
+		savedviewapp.NewDeleteSavedViewUseCase(savedViewRepo),
+	)
+	protected.Get("/saved-views", savedViewHandler.ListSavedViews)
+	protected.Post("/saved-views", savedViewHandler.CreateSavedView)
+	protected.Patch("/saved-views/:id", savedViewHandler.UpdateSavedView)
+	protected.Delete("/saved-views/:id", savedViewHandler.DeleteSavedView)
 
 	// Attack Surface — topology. Wired later than the asset block because the
 	// node badges need the vulnerability repository; see the "topology wiring"
