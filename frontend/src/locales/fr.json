@@ -356,5 +356,44 @@
       "overdue_remediation": "Remédiation en retard",
       "unknown": "Action requise"
     }
+  },
+  "bulk": {
+    "title": {
+      "delete": "Supprimer {n} {entity} ?",
+      "changeStatus": "Changer le statut de {n} {entity} ?"
+    },
+    "subtitle": "Rien n'a encore changé. Voici ce qui changerait.",
+    "previewing": "Calcul de ce qui changerait…",
+    "previewFailed": "L'aperçu n'a pas pu être calculé",
+    "previewFailedHelp": "Rien n'a été modifié. Réessayez ou réduisez la sélection.",
+    "previewAgain": "Recalculer l'aperçu",
+    "applyFailed": "L'action n'a pas été exécutée",
+    "applyFailedHelp": "Le lot s'applique entièrement ou pas du tout : rien n'a été modifié. La liste a été rétablie telle qu'elle était.",
+    "refused": "La sélection a changé depuis l'aperçu",
+    "refusedMissing": "Certaines lignes sélectionnées n'existent plus. Rien n'a été modifié.",
+    "refusedMoved": "Quelqu'un a modifié ces lignes pendant que vous lisiez l'aperçu : l'action a été refusée plutôt qu'appliquée à des lignes que vous n'avez pas vues. Rien n'a été modifié.",
+    "confirmApply": "Appliquer",
+    "confirmDelete": "Supprimer",
+    "selected": "Sélectionnées",
+    "willChange": "Seront modifiées",
+    "alreadyThere": "Déjà conformes",
+    "missing": "{n} des {total} lignes sélectionnées n'existent plus et seront refusées.",
+    "nothingToDo": "Aucune des {entity} sélectionnées ne changerait — elles portent déjà cette valeur.",
+    "noneFound": "Aucune des lignes sélectionnées n'existe encore. Rien ne changerait.",
+    "willBeDeleted": "supprimée",
+    "justification": "Motif (facultatif)",
+    "justificationHelp": "Enregistré sur chaque entrée d'audit produite par cette action.",
+    "entity": {
+      "vulnerabilities": "vulnérabilités",
+      "assets": "actifs"
+    },
+    "action": {
+      "markRemediating": "Marquer « en remédiation »",
+      "delete": "Supprimer"
+    },
+    "applied": "{n} {entity} mises à jour",
+    "deleted": "{n} {entity} supprimées",
+    "changesTitle": "Ce qui change",
+    "changesMore": "…et {n} de plus."
   }
 }

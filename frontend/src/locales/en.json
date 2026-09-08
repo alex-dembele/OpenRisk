@@ -356,5 +356,44 @@
       "overdue_remediation": "Overdue remediation",
       "unknown": "Action required"
     }
+  },
+  "bulk": {
+    "title": {
+      "delete": "Delete {n} {entity}?",
+      "changeStatus": "Change the status of {n} {entity}?"
+    },
+    "subtitle": "Nothing has changed yet. This is what would.",
+    "previewing": "Working out what would change…",
+    "previewFailed": "The preview could not be computed",
+    "previewFailedHelp": "Nothing was changed. Try again, or narrow the selection.",
+    "previewAgain": "Preview again",
+    "applyFailed": "The action did not run",
+    "applyFailedHelp": "The batch is applied in full or not at all, so nothing was changed. The list has been put back as it was.",
+    "refused": "The selection changed since the preview",
+    "refusedMissing": "Some of the selected rows no longer exist. Nothing was changed.",
+    "refusedMoved": "Someone else edited these rows while you were reading the preview, so the action was refused rather than applied to rows you did not see. Nothing was changed.",
+    "confirmApply": "Apply",
+    "confirmDelete": "Delete",
+    "selected": "Selected",
+    "willChange": "Will change",
+    "alreadyThere": "Already as asked",
+    "missing": "{n} of the {total} selected rows no longer exist and will be refused.",
+    "nothingToDo": "None of the selected {entity} would change — they already hold that value.",
+    "noneFound": "None of the selected rows exist any more. Nothing would change.",
+    "willBeDeleted": "deleted",
+    "justification": "Reason (optional)",
+    "justificationHelp": "Recorded on every audit entry this action writes.",
+    "entity": {
+      "vulnerabilities": "vulnerabilities",
+      "assets": "assets"
+    },
+    "action": {
+      "markRemediating": "Mark \"in remediation\"",
+      "delete": "Delete"
+    },
+    "applied": "{n} {entity} updated",
+    "deleted": "{n} {entity} deleted",
+    "changesTitle": "What changes",
+    "changesMore": "…and {n} more."
   }
 }
