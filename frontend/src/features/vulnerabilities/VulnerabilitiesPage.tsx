@@ -44,7 +44,12 @@ import { useAuthStore } from '../../hooks/useAuthStore';
 import { useFocusParam } from '../../shared/useFocusParam';
 import { useSoftDelete } from '../../shared/useSoftDelete';
 import { useVulnerabilities, useVulnStats, useVulnMutations } from './useVulnerabilities';
-import type { Vulnerability, VulnStatus, VulnQueryParams } from './vulnerabilityService';
+import type {
+  Vulnerability,
+  VulnStatus,
+  VulnQueryParams,
+  VulnListResponse,
+} from './vulnerabilityService';
 import {
   SEVERITY_META,
   STATUS_META,
@@ -56,12 +61,53 @@ import {
 import { IngestModal } from './IngestModal';
 import { IntegrationsPanel } from './IntegrationsPanel';
 import { safeExternalUrl } from '../../shared/safeUrl';
+import {
+  BulkPreviewDialog,
+  useGovernedBulk,
+  type BulkChangeInput,
+} from '../../shared/bulk';
 
 const t = (lang: 'fr' | 'en', fr: string, en: string) => (lang === 'fr' ? fr : en);
 
 // CVSS, NOT the OpenRisk score. CVSS is an external 0–10 scale defined by FIRST
 // and its severity cuts (9/7/4) are part of that standard, not ours. Kept local
 // and named so it is never mistaken for a score band — see docs/scoring/.
+/**
+ * The pending change, applied to a cached page of the register (ABSOLUTE RULE
+ * 10). Restored verbatim by the hook if the server refuses — criterion 8.
+ *
+ * `cached` arrives untyped because the ['vulnerabilities'] prefix also holds the
+ * KPI stats and the connector list. Anything that is not a page of the register
+ * is handed back untouched rather than guessed at.
+ */
+function patchVulnPage(
+  cached: unknown,
+  ids: ReadonlySet<string>,
+  change: BulkChangeInput,
+): unknown {
+  if (!isVulnPage(cached)) return cached;
+
+  if (change.action === 'delete') {
+    const items = cached.items.filter((v) => !ids.has(v.id));
+    return { ...cached, items, total: Math.max(0, cached.total - (cached.items.length - items.length)) };
+  }
+
+  const status = change.status;
+  if (status === undefined || !(status in STATUS_META)) return cached;
+  return {
+    ...cached,
+    items: cached.items.map((v) =>
+      ids.has(v.id) ? { ...v, status: status as VulnStatus } : v,
+    ),
+  };
+}
+
+function isVulnPage(cached: unknown): cached is VulnListResponse {
+  if (typeof cached !== 'object' || cached === null) return false;
+  const candidate = cached as { items?: unknown; total?: unknown };
+  return Array.isArray(candidate.items) && typeof candidate.total === 'number';
+}
+
 const cvssColor = (s: number) =>
   s >= 9 ? 'var(--critical)' : s >= 7 ? 'var(--high)' : s >= 4 ? 'var(--medium)' : 'var(--low)';
 
@@ -299,40 +345,53 @@ export function VulnerabilitiesPage() {
   );
 
   /* --------------------------------------------------------- bulk actions */
+  // Governed (#582): every bulk action goes preview → confirm → transactional,
+  // audited apply on the server. The register no longer fans a selection out
+  // into one request per row — that was neither atomic nor attributable.
+  const bulk = useGovernedBulk({
+    register: 'vulnerabilities',
+    optimistic: {
+      // Narrow: the ['vulnerabilities'] prefix also caches stats and connectors,
+      // which this patch has no business rewriting.
+      queryKey: ['vulnerabilities', 'list'],
+      apply: patchVulnPage,
+      // Wide: a status change moves the KPI counts too.
+      invalidateKey: ['vulnerabilities'],
+    },
+    onApplied: (result, change) => {
+      const n = result.applied ?? 0;
+      toast.success(
+        change.action === 'delete'
+          ? t(lang, `${n} vulnérabilité(s) supprimée(s)`, `${n} vulnerability(ies) deleted`)
+          : t(lang, `${n} vulnérabilité(s) mise(s) à jour`, `${n} vulnerability(ies) updated`),
+      );
+    },
+  });
+
   const bulkActions: BulkAction<Vulnerability>[] = useMemo(
     () => [
       {
         key: 'remediating',
         label: t(lang, 'Marquer « en remédiation »', 'Mark "in remediation"'),
         icon: Zap,
-        hidden: !canWrite,
+        // Two gates, and both are needed: the permission the user holds, and
+        // what the server says this register can do. Neither is the enforcement
+        // — that is the route middleware (criterion 4).
+        hidden: !canWrite || !bulk.supports('change_status'),
         selectionOnly: true,
-        run: async ({ ids }) => {
-          await Promise.all(
-            ids.map((id) => updateStatus.mutateAsync({ id, status: 'in_remediation' })),
-          );
-          toast.success(
-            t(
-              lang,
-              `${ids.length} vulnérabilité(s) mise(s) à jour`,
-              `${ids.length} vulnerability(ies) updated`,
-            ),
-          );
-        },
+        run: ({ ids }) => bulk.request({ action: 'change_status', status: 'in_remediation' }, ids),
       },
       {
         key: 'delete',
         label: t(lang, 'Supprimer', 'Delete'),
         icon: Trash2,
         danger: true,
-        hidden: !canDelete,
+        hidden: !canDelete || !bulk.supports('delete'),
         selectionOnly: true,
-        run: async ({ rows }) => {
-          rows.forEach((v) => softDeleteVuln(v));
-        },
+        run: ({ ids }) => bulk.request({ action: 'delete' }, ids),
       },
     ],
-    [canWrite, canDelete, softDeleteVuln, updateStatus, lang],
+    [canWrite, canDelete, bulk, lang],
   );
 
   const kpi = (
@@ -443,6 +502,7 @@ export function VulnerabilitiesPage() {
           }}
         />
       )}
+      <BulkPreviewDialog bulk={bulk} entityLabel={tr('vulnérabilités', 'vulnerabilities')} />
       <IngestModal isOpen={ingestOpen} onClose={() => setIngestOpen(false)} />
       <IntegrationsPanel
         isOpen={connectorsOpen}
