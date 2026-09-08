@@ -457,6 +457,78 @@ financière + un plan de traitement suggéré ». Une branche par phase, commits
 11. **Billing & Plans (17.2)** + conversion (Partie C) + **Onboarding (17.6)** + **Super Admin (17.4)**.
 
 **Bloc W1 — Wave 1, fondations produit**
+- [ ] **W1-05 — Tableaux d'entreprise, vues enregistrées et actions en masse gouvernées**
+  (épique #235, enfants #580 / #581 / #582, tous **fermés par merge**).
+  Le composant de tableau, la virtualisation, le tri et la pagination serveur, les facettes
+  dans l'URL, la sélection page-vs-N-résultats, l'export CSV et la navigation clavier ont été
+  livrés en août (`frontend/src/shared/datatable/`, 2374 lignes, `docs/JOURNAL.md:119-129`).
+  Wave 1 a livré les trois manques qui restaient : les vues enregistrées côté serveur (W1-05a),
+  les actions en masse transactionnelles et auditées sur les risques (W1-05b), et le mécanisme
+  partagé d'aperçu + application gouvernée, appliqué aux vulnérabilités et aux actifs (W1-05c).
+  **Reste ouvert — l'épique n'est pas close.** Trois choses, dont une bloquante :
+  - **Le registre des risques n'utilise pas l'endpoint gouverné qu'il possède** (#598).
+    `POST /api/v1/risks/bulk` est transactionnel, audité et monté
+    (`cmd/server/main.go:1365`), mais `RiskRegisterPage.tsx:489-506` supprime toujours **une
+    requête par ligne** (`await Promise.all(ids.map((id) => deleteRisk(id)))`), et la mutation
+    `useRisks.ts:131` qui appelle l'endpoint n'a **aucun appelant**. Côté serveur la garantie
+    existe ; depuis le siège de l'utilisateur elle n'est pas atteignable. Tant que #598 n'est
+    pas livré, « actions en masse gouvernées sur le registre des risques » ne peut pas être
+    déclaré livré (RÈGLE ABSOLUE 12).
+  - **Quatre registres sur sept n'ont pas d'actions en masse** : mitigations et incidents (C2),
+    jetons d'API (C3), et la piste d'audit de gouvernance **abandonnée avec motif** — elle est
+    immuable et chaînée par tenant (`internal/domain/governance.go:96`), y écrire en masse
+    casserait la chaîne. C2 et C3 sont désormais déposés en **#600**.
+  - **Le registre des risques n'a pas d'aperçu d'impact** (#599). `/risks/bulk` est une route
+    unique dont l'action vient du **corps** de la requête, alors que #582 a délibérément
+    abandonné cette forme (un porteur de `risks:update` pouvait poster une action `delete`) ;
+    vulnérabilités et actifs ont `capabilities`, `preview`, et une route par action derrière sa
+    propre permission. L'aperçu est ce que #582 appelle « la moitié qui manquait à #581 ».
+  - **`docs/MARKETING_CLAIM_MATRIX.md` n'est pas à jour** pour les trois enfants : statut
+    `VERIFIED` réservé à `product-verifier` via `/verify-claims`.
+  Le reste de la dette de vérification de l'épique (Gap 3, `docs/JOURNAL.md:129`) a été
+  **apurée le 2026-09-08** par #583 : chaîne Go passée, suite E2E exécutée pour la première
+  fois (270 cas, 197 verts), 62 échecs déposés en #587 → #596.
+- [x] **W1-05a — Vues de tableau enregistrées : persistées côté serveur et partageables** (#580,
+  enfant A de l'épique #235, indépendant des deux autres).
+  Une vue enregistrée vivait dans le `localStorage` du navigateur de son auteur
+  (`useTableState.ts:228,237` avant correction) : un responsable des risques qui avait construit
+  la bonne vue du registre pour son comité ne pouvait la donner à personne, et
+  `grep -rni "saved_view|savedview|table_view|column_pref"` sur `backend/` ne renvoyait **rien** —
+  ni table, ni API, ni partage. Le type `SavedView` était une forme cliente et rien d'autre.
+  **Livré** : `internal/domain/saved_view.go` (entité + `SavedViewVisibility` `personal`/`shared`),
+  quatre cas d'usage un fichier chacun dans `internal/application/savedview/`
+  (`create_`, `list_`, `update_`, `delete_saved_view.go`),
+  `internal/infrastructure/repository/gorm_saved_view_repository.go` et
+  `internal/handler/saved_view_handler.go`, montés en
+  `GET`/`POST /api/v1/saved-views` et `PATCH`/`DELETE /api/v1/saved-views/:id`
+  (`cmd/server/main.go:1779-1782`).
+  **Isolation (RÈGLE ABSOLUE 2)** : `tenant_id` est dans le `WHERE` de **chacune** des requêtes du
+  dépôt, y compris la garde d'unicité `(tenant_id, user_id, table_id, name)` ; le fichier le dit
+  en tête et le prouve ligne à ligne. Le partage est **intra-tenant uniquement**, conformément au
+  Scope OUT de l'épique. Une vue `shared` est lisible par le tenant, modifiable par son
+  propriétaire ou un admin du tenant, et attribuée à son auteur dans l'interface.
+  **Front** : `src/services/savedViewService.ts` (schéma Zod côté client, RÈGLE 11) et la
+  migration unique `localStorage` → serveur dans `useTableState.ts:266` — la copie locale n'est
+  effacée qu'**après** que toutes les vues ont été acceptées par le serveur ; un échec n'est pas
+  fatal, les vues restent locales et la migration est retentée.
+  **Tests** : `internal/application/savedview/saved_view_test.go` (9), 
+  `internal/infrastructure/repository/gorm_saved_view_repository_test.go` (7, SQLite réel) et
+  `frontend/src/shared/datatable/__tests__/savedViews.test.tsx` (15 — dont la migration locale,
+  la charge locale corrompue ignorée, le refus d'un nom sans lettre ni chiffre, le refus au-delà
+  de 120 caractères, la vue partagée d'un collègue en lecture seule, et trois passes axe-core
+  sans violation serious/critical). Vérifiés le 2026-09-08 dans la suite front complète :
+  47 fichiers, 516 tests, tous verts.
+  **Reste à faire**
+  - **Aucune migration SQL versionnée.** La table `saved_views` est créée par l'`AutoMigrate` de
+    GORM (`cmd/server/main.go:378`) et non par un fichier de `migrations/`. C'est le mécanisme
+    déjà en place pour les autres entités, mais cela signifie qu'il n'existe pas de `down` et que
+    la table n'apparaît pas dans l'historique `golang-migrate`.
+  - **La disposition des colonnes reste locale, par choix.** `ColumnPrefs` continue de vivre dans
+    le `localStorage` (`useTableState.ts:15`, `ColumnsMenu.tsx:4`) : c'est une préférence par
+    utilisateur **et par navigateur**, pas un artefact partageable. Le Gap 1 de #235 est donc
+    clos pour les vues, ouvert par décision pour les colonnes.
+  - Ligne dans `docs/MARKETING_CLAIM_MATRIX.md` : **non ajoutée**, statut `VERIFIED` réservé à
+    `product-verifier` via `/verify-claims`.
 - [x] **W1-05b — Actions en masse du registre : transactionnelles, auditées, complètes** (#581,
   enfant B de l'épique #235, débloqué par **D-036**).
   `POST /api/v1/risks/bulk` appliquait ce qu'il pouvait, item par item, sans transaction, et
