@@ -75,7 +75,7 @@ OpenRisk allows every organization to:
 ```bash
 git clone https://github.com/opendefender/OpenRisk.git
 cd OpenRisk
-./scripts/install.sh
+./install.sh
 ```
 
 That is the whole procedure. The installer generates the RS256 keypair and every

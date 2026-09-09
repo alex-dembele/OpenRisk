@@ -6,10 +6,16 @@
 #
 # Services: postgres, redis, backend (single Go binary: API + workers), frontend.
 # The test database from the dev compose is intentionally absent here.
+#
+# Aucun `container_name` : il fixait les noms à openrisk_db / openrisk_redis,
+# déjà pris par la stack de développement du dépôt racine, donc `./install.sh`
+# échouait sur une machine de développeur avec un conflit Docker peu clair
+# (#328). Compose nomme désormais les conteneurs d'après le projet, les deux
+# stacks coexistent, et tous les scripts adressent déjà les services par leur
+# nom de service (`$DC exec -T db`), pas par nom de conteneur.
 services:
   db:
     image: postgres:16-alpine
-    container_name: openrisk_db
     environment:
       POSTGRES_USER: ${DB_USER:-openrisk}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
@@ -26,7 +32,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: openrisk_redis
     command: redis-server --appendonly yes
     volumes:
       - openrisk_redis_data:/data
@@ -43,7 +48,6 @@ services:
       context: ../../backend
       dockerfile: Dockerfile
     image: openrisk/backend:${OPENRISK_VERSION:-latest}
-    container_name: openrisk_backend
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -96,7 +100,6 @@ services:
       context: ../../frontend
       dockerfile: Dockerfile
     image: openrisk/frontend:${OPENRISK_VERSION:-latest}
-    container_name: openrisk_frontend
     depends_on: [backend]
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}

@@ -154,11 +154,15 @@ log "Sign in with:"
 log "   • Email:    ${ADMIN_EMAIL}"
 log "   • Password: ${ADMIN_PASSWORD}"
 printf '\n'
+# Both branches have to be true even when a previous run died AFTER writing .env
+# but before the stack ever came up — in that case the operator has never seen a
+# successful install, and telling them the password is "unchanged from your
+# existing install" is simply false.
 if [ "$ADMIN_IS_NEW" -eq 1 ]; then
   warn "Change this password on first login. It is stored in deploy/selfhost/.env (0600)."
 else
-  log "(Unchanged from your existing install. If you have already changed it in the"
-  log " app, the value in .env is stale and the app is right.)"
+  log "This value comes from deploy/selfhost/.env (0600). If you have already"
+  log "changed the password in the app, the app is right and .env is stale."
 fi
 
 exit 0

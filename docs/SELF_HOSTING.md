@@ -28,8 +28,11 @@ Or from a clone:
 ```bash
 git clone https://github.com/opendefender/OpenRisk.git
 cd OpenRisk
-./scripts/install.sh
+./install.sh
 ```
+
+`./install.sh` at the root is the entry point; it delegates to
+`scripts/install.sh`, resolves symlinks, and works from any working directory.
 
 The installer:
 
@@ -118,7 +121,7 @@ overwrites the current database and secrets.
 ## ARM64 (AWS Graviton, Apple Silicon, Raspberry Pi)
 
 Base images (`postgres`, `redis`, `alpine`, `golang`) are multi-arch, so the
-stack builds and runs natively on ARM64 — `./scripts/install.sh` works unchanged
+stack builds and runs natively on ARM64 — `./install.sh` works unchanged
 on a Graviton VM. To build and publish a multi-arch image:
 
 ```bash
@@ -139,6 +142,6 @@ optional payment/telemetry env via the chart's `values` / a `Secret`.
 ## Troubleshooting
 
 - **Backend restarts / "RSA keys required":** the `secrets/` keypair is missing —
-  re-run `./scripts/install.sh` (it regenerates only what's absent).
+  re-run `./install.sh` (it regenerates only what's absent).
 - **Port already in use:** set `BACKEND_PORT` / `FRONTEND_PORT` in `.env`.
 - **Logs:** `cd deploy/selfhost && docker compose logs -f backend`.
