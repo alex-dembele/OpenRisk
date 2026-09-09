@@ -5,25 +5,69 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-### D-039 — should `master` refuse a merge while CI is red? · raised 2026-09-09
-**Context** — #608 found `npm run build` broken on `master`. The gate that
-should have caught it was not missing: `frontend-typecheck` in `.github/
-workflows/ci.yml` **ran and failed** on PR #601's branch (run 34209169493 —
-Frontend Typecheck: failure, Build Frontend: skipped), and the PR was merged
-anyway. Six of that run's twelve jobs were red.
-**So the fix for #608 is not a new CI step.** The step exists and worked. What
-is missing is anything that makes a red run block a merge.
-**Options** — (A) branch protection on `master` requiring `CI Status` green;
-(B) required reviewers plus a manual rule; (C) leave it, and accept that the
-owner reads CI before merging.
-**Cost of delay** — this already cost one broken `master` and one P0. The next
-one is silent until someone tries to build.
-**Recommendation** — (A). It is a repository setting, it is reversible, and it
-costs nothing when CI is green. It needs the owner: an agent cannot change
-branch protection, and turning it on will block merges that are red today.
+### D-041 — may the backend container generate its own RS256 keypair? · raised 2026-09-09
+**Context** — #328's criterion 5 wants a one-click deploy to a third-party
+platform (Render/Railway/Fly). It cannot be built today: the backend panics at
+boot without an RS256 keypair (`internal/config/config.go:71`), and no PaaS
+blueprint can generate a PEM — Render's `generateValue` makes random strings,
+not keypairs. So any button would ask the user to paste a private key, which is
+not one click and is a bad first instruction to give someone.
+An **uncommitted** `backend/docker-entrypoint.sh` in the working tree already
+solves it: it generates a 2048-bit pair into the secrets volume on first boot,
+under `umask 077`, and never overwrites anything supplied. Nothing references
+it — no Dockerfile, no compose file.
+**Why this reaches you** — wiring it in changes an auth/crypto behaviour, not a
+bug: the failure mode moves from "refuse to boot until an operator supplies
+keys" to "quietly mint keys". That is the redesign CLAUDE.md reserves for you.
+The consequence to weigh: a key born inside an ephemeral container is lost when
+the volume is, and every token signed by it dies with it.
+**Options** — (A) wire the entrypoint in for self-host/PaaS images only, keeping
+fail-fast for production images; (B) wire it in everywhere; (C) leave it, and
+ship no one-click deploy.
+**Chosen while waiting** — (C). #328 ships without criterion 5 rather than with
+an unverifiable button; nothing was wired in.
+**Cost of delay** — the one-click acquisition channel stays closed.
+**Recommendation** — (A), plus a startup warning naming the generated key, so an
+operator who meant to supply their own finds out immediately.
 
 
 ## Resolved
+
+### D-040 — what a self-hosted instance gets · decided 2026-09-09
+**Decided (owner)** — "Si une personne veut héberger lui-même tout sera gratuit
+sauf ce qui nécessite un appel API que j'ai configuré, un peu comme avec l'IA —
+il ne l'aura pas."
+
+Self-hosting is **free and complete**. The line is not features-versus-features
+and not volume: it is **who pays for the outbound call**. Anything that runs on
+the operator's own infrastructure is included. Anything that consumes an API the
+owner configures and is billed for is not.
+
+**Mapping, established from the code rather than assumed:**
+
+| Capability | Outbound call the owner pays for? | Self-hosted |
+|---|---|---|
+| Smart risk score, financial quantification, executive dashboard | no — local computation | included |
+| Infra scanner | no — the agent registers with the operator's own instance (`/scanner/agents/register`) | included |
+| Threat intel (CTI) | no — NVD and CISA KEV, free public feeds (`pkg/cti/client.go`) | included |
+| Compliance frameworks, automation, governance, REST API, SSO, multi-tenant | no | included |
+| **AI advisor** | **yes — `ANTHROPIC_API_KEY` (`pkg/ai/claude_advisor.go`)** | operator's own key, or the existing no-LLM template fallback |
+| Support, SLA | a service the owner renders, not software | community support, no SLA |
+| Users / risks / assets / integrations | it is the operator's own hardware | uncapped |
+
+**Reading applied to the AI row** — the owner's objection is to paying for other
+people's inference, not to the feature existing. A self-hoster who supplies their
+own `ANTHROPIC_API_KEY` costs the owner nothing, and `pkg/ai` already degrades to
+`template_advisor.go` when no key is present ("Réponse générée sans LLM"). So the
+feature is granted and simply does nothing without a key, rather than being
+blocked. **If the intent was that self-hosted has no AI at all even with the
+operator's own key, say so and the row flips.**
+
+**Consequence** — self-hosted can no longer resolve to `PlanFree`, which caps it
+at 2 users and 50 risks. It needs its own entitlement set. Implementation is
+issue #612; #415 is unaffected, since that issue is about the hosted plan matrix
+and this decision is about self-hosting.
+
 
 <!-- Append: date · decision · rationale · issues unblocked -->
 

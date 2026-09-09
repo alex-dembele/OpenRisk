@@ -62,26 +62,59 @@ else
 fi
 
 # --- 5. .env with strong random secrets -------------------------------------
+# set_kv is defined outside the block below so it can also fill a key that an
+# older install predates, without rewriting that install's other settings.
+set_kv() { # key value
+  if grep -q "^$1=" .env; then
+    # Use a temp file so any char in $2 is safe.
+    awk -v k="$1" -v v="$2" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' .env > .env.tmp && mv .env.tmp .env
+  else
+    printf '%s=%s\n' "$1" "$2" >> .env
+  fi
+}
+
+# 32 alphanumeric characters from OpenSSL's CSPRNG (the backend requires >= 12
+# and three character classes). Deliberately not `tr -dc < /dev/urandom | head`:
+# head closing the pipe SIGPIPEs its producer, which trips `set -o pipefail`.
+gen_password() {
+  local raw
+  raw="$(openssl rand -base64 64 | tr -d '\n+/=')"
+  printf '%s' "${raw:0:32}"
+}
+
 if [ ! -f .env ]; then
   log "Creating .env with generated secrets ..."
   cp .env.example .env
-  # Fill the empty required fields with generated values (portable sed).
-  set_kv() { # key value
-    if grep -q "^$1=" .env; then
-      # Use a temp file so any char in $2 is safe.
-      awk -v k="$1" -v v="$2" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' .env > .env.tmp && mv .env.tmp .env
-    else
-      printf '%s=%s\n' "$1" "$2" >> .env
-    fi
-  }
   set_kv DB_PASSWORD "$(rand_hex 24)"
   set_kv MFA_ENCRYPTION_KEY "$(rand_hex 32)"       # 32 bytes hex → 64 chars; backend takes 32 bytes
   set_kv SCANNER_CREDENTIAL_KEY "$(rand_b64_32)"
   set_kv AUDIT_EXPORT_KEY "$(rand_b64_32)"
-  chmod 600 .env
 else
   log ".env already present — keeping your configuration."
 fi
+
+# The first administrator.
+#
+# APP_ENV is `production` in the self-hosted compose, and in production the
+# backend REFUSES TO BOOT rather than seed a publicly-known default password
+# (handler.SeedAdminUser). Without this the container fatally restart-loops on a
+# fresh database, which is why the install never completed (#328).
+#
+# So the password is generated here and stored in .env, next to DB_PASSWORD and
+# the encryption keys, with the same 0600. On the first boot — and only then,
+# because the seeder runs when the users table is empty — the backend creates
+# the administrator with it, together with an organisation and a root
+# membership, so the account can actually sign in.
+#
+# It is generated ONCE and then kept: regenerating it on a re-run would print a
+# password that no longer matches the seeded account.
+if ! grep -qE '^INITIAL_ADMIN_PASSWORD=.+' .env; then
+  set_kv INITIAL_ADMIN_PASSWORD "$(gen_password)"
+  ADMIN_IS_NEW=1
+else
+  ADMIN_IS_NEW=0
+fi
+chmod 600 .env
 
 # --- 6. Bring the stack up ---------------------------------------------------
 log "Building and starting the stack (this can take a few minutes on first run) ..."
@@ -91,17 +124,45 @@ $DC up -d --build
 PORT="$(grep -E '^BACKEND_PORT=' .env | cut -d= -f2)"; PORT="${PORT:-8080}"
 FPORT="$(grep -E '^FRONTEND_PORT=' .env | cut -d= -f2)"; FPORT="${FPORT:-3000}"
 log "Waiting for the backend to become healthy on :$PORT ..."
-for i in $(seq 1 60); do
+HEALTHY=0
+for _ in $(seq 1 60); do
   if curl -fsS "http://localhost:${PORT}/api/v1/health" >/dev/null 2>&1; then
-    log "Backend is healthy."
-    log "✅ OpenRisk is up."
-    log "   • App:  http://localhost:${FPORT}"
-    log "   • API:  http://localhost:${PORT}/api/v1"
-    log "   • Logs: (cd deploy/selfhost && $DC logs -f)"
-    exit 0
+    HEALTHY=1
+    break
   fi
   sleep 3
 done
-warn "Backend did not report healthy in time. Inspect logs with:"
-warn "  (cd deploy/selfhost && $DC logs backend)"
-exit 1
+if [ "$HEALTHY" -ne 1 ]; then
+  warn "Backend did not report healthy in time. Inspect logs with:"
+  warn "  (cd deploy/selfhost && $DC logs backend)"
+  exit 1
+fi
+log "Backend is healthy."
+
+# --- 8. Tell the operator what they have ------------------------------------
+# An install that stops at "the stack is up" is not finished: the operator still
+# has to work out how to get in.
+ADMIN_EMAIL="admin@opendefender.io"   # fixed by handler.SeedAdminUser
+ADMIN_PASSWORD="$(grep -E '^INITIAL_ADMIN_PASSWORD=' .env | cut -d= -f2-)"
+
+log "✅ OpenRisk is up."
+log "   • App:  http://localhost:${FPORT}"
+log "   • API:  http://localhost:${PORT}/api/v1"
+log "   • Logs: (cd deploy/selfhost && $DC logs -f)"
+printf '\n'
+log "Sign in with:"
+log "   • Email:    ${ADMIN_EMAIL}"
+log "   • Password: ${ADMIN_PASSWORD}"
+printf '\n'
+# Both branches have to be true even when a previous run died AFTER writing .env
+# but before the stack ever came up — in that case the operator has never seen a
+# successful install, and telling them the password is "unchanged from your
+# existing install" is simply false.
+if [ "$ADMIN_IS_NEW" -eq 1 ]; then
+  warn "Change this password on first login. It is stored in deploy/selfhost/.env (0600)."
+else
+  log "This value comes from deploy/selfhost/.env (0600). If you have already"
+  log "changed the password in the app, the app is right and .env is stale."
+fi
+
+exit 0

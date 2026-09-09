@@ -70,41 +70,42 @@ OpenRisk allows every organization to:
 - Git
 - 4GB RAM, 2GB disk space
 
-### Local Development
+### Self-hosting — one command
 
 ```bash
-# Clone the repository
 git clone https://github.com/opendefender/OpenRisk.git
 cd OpenRisk
-
-# Create .env file with secure credentials
-cat > .env.local << 'EOF'
-# Admin Account (customize these values)
-INITIAL_ADMIN_EMAIL=admin@yourdomain.com
-INITIAL_ADMIN_PASSWORD=<YOUR_SECURE_PASSWORD_HERE>
-
-# JWT Configuration
-JWT_SECRET=<YOUR_JWT_SECRET_HERE>
-JWT_EXPIRATION_HOURS=24
-
-# Database
-DATABASE_URL=postgresql://openrisk:secure_password@postgres:5432/openrisk
-REDIS_URL=redis://redis:6379
-
-# API
-API_PORT=8080
-API_HOST=0.0.0.0
-EOF
-
-# Start all services (PostgreSQL, Redis, Backend, Frontend)
-docker compose up -d
-
-# Access the application
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:8080
-# API Docs: http://localhost:8080/swagger
-# Login with credentials from .env.local
+./install.sh
 ```
+
+That is the whole procedure. The installer generates the RS256 keypair and every
+secret, starts PostgreSQL, Redis, the API and the frontend, waits for health, and
+**prints the credentials of the administrator it created**:
+
+```
+[openrisk] ✅ OpenRisk is up.
+[openrisk]    • App:  http://localhost:3000
+[openrisk]    • API:  http://localhost:8080/api/v1
+[openrisk] Sign in with:
+[openrisk]    • Email:    admin@opendefender.io
+[openrisk]    • Password: ccsc7TRz2AbdkFwN9BRDAWAVmPagWARV
+```
+
+No file is edited by hand at any point. Re-running the installer keeps your
+configuration, your keys and that account.
+
+A CI job ([`selfhost-install.yml`](.github/workflows/selfhost-install.yml)) runs
+this flow monthly on a fresh Ubuntu 24.04 VM and signs in with the printed
+credentials. It has **not yet had a green run** — the defects that kept it red
+are fixed in #328; the flow was verified by hand on a clean stack on 2026-09-09.
+
+Full guide, including what a self-hosted instance is entitled to, upgrades and
+backups: **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**.
+
+### Local development
+
+Working on OpenRisk itself (hot reload, test databases, seeded fixtures) is a
+different setup: see **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)**.
 
 ### ⚠️ Security: Default Credentials
 
