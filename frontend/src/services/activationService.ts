@@ -10,9 +10,10 @@
 // through. The client asks; the server answers.
 
 import { api } from '../lib/api';
+import type { LocaleCode } from '../i18n/locales';
 
 /** Language keys the server ships copy in. */
-export type Lang = 'fr' | 'en';
+export type Lang = LocaleCode;
 
 export interface ActivationStep {
   key: string;

@@ -3,6 +3,13 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import {
+  DEFAULT_LOCALE,
+  ENABLED_LOCALES,
+  localeDirection,
+  resolveLocale,
+  type LocaleCode,
+} from '../i18n/locales';
 
 export type Theme = 'dark' | 'light';
 /**
@@ -24,7 +31,13 @@ export function resolveTheme(mode: ThemeMode): Theme {
   return mode === 'system' ? systemTheme() : mode;
 }
 export type Variant = 'azure' | 'iris';
-export type Lang = 'fr' | 'en';
+/**
+ * The active language. Derived from the locale registry rather than written out
+ * here: adding a language to `src/i18n/locales.ts` widens this type and every
+ * `switch` and comparison in the app keeps compiling. Nothing outside the
+ * registry is allowed to enumerate languages.
+ */
+export type Lang = LocaleCode;
 /** UI density (docs/UI_ELEVATION_PROPOSAL §1.2). Confort is the ratified default. */
 export type Density = 'comfort' | 'compact' | 'spacious';
 
@@ -61,6 +74,10 @@ function applyDom(theme: Theme, variant: Variant, lang: Lang) {
   root.setAttribute('data-theme', theme);
   root.setAttribute('data-variant', variant);
   root.setAttribute('lang', lang);
+  // Writing direction comes from the registry, never from a list of RTL codes
+  // kept somewhere else. This is what makes `dir`-scoped CSS and the browser's
+  // own bidi algorithm work the moment an RTL locale is enabled.
+  root.setAttribute('dir', localeDirection(lang));
 }
 
 /** Reflect density onto <html> (drives --den-* tokens). Comfort clears the attr. */
@@ -73,9 +90,22 @@ function applyDensity(density: Density) {
 
 const DENSITY_CYCLE: Density[] = ['comfort', 'compact', 'spacious'];
 
-// Legacy i18n key used by the pre-existing useI18n hook; default to FR per design.
-const legacyLocale =
-  (typeof localStorage !== 'undefined' && (localStorage.getItem('locale') as Lang)) || 'fr';
+/**
+ * First language on a first visit: the legacy `locale` key if one was stored,
+ * else French — the primary market, per the original design default.
+ *
+ * The registry also exposes `negotiateLocale()`, which would pick from
+ * `navigator.languages` instead. It is deliberately NOT wired here: defaulting
+ * to the browser's language is a product decision (it would open the app in
+ * English for a French customer on an English laptop), and it is logged for the
+ * owner in docs/DECISIONS.md rather than taken as a side effect of #315.
+ *
+ * The stored value is an untrusted string, so it goes through the registry.
+ */
+const legacyLocale: Lang = resolveLocale(
+  typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null,
+  DEFAULT_LOCALE,
+);
 
 export const useUIStore = create<UIState>()(
   persist(
@@ -107,14 +137,23 @@ export const useUIStore = create<UIState>()(
         applyDom(get().theme, variant, get().lang);
         set({ variant });
       },
-      setLang: (lang) => {
+      setLang: (requested) => {
+        // A registered-but-disabled locale (one with no catalogue yet) must never
+        // become the active language, however it arrives — a stale localStorage
+        // value, a deep link, or a switcher rendered from a stale build.
+        const lang = resolveLocale(requested, get().lang);
         if (typeof localStorage !== 'undefined') localStorage.setItem('locale', lang);
         applyDom(get().theme, get().variant, lang);
         set({ lang });
         // Keep any consumer listening on the legacy event in sync.
         window.dispatchEvent(new CustomEvent('locale-change', { detail: { locale: lang } }));
       },
-      toggleLang: () => get().setLang(get().lang === 'fr' ? 'en' : 'fr'),
+      /** Cycle through the languages actually offered, in registry order. */
+      toggleLang: () => {
+        const offered = ENABLED_LOCALES;
+        const next = offered[(offered.indexOf(get().lang) + 1) % offered.length];
+        get().setLang(next);
+      },
       setDensity: (density) => {
         applyDensity(density);
         set({ density });
@@ -145,6 +184,9 @@ export const useUIStore = create<UIState>()(
           // Re-resolve rather than trusting a stored resolved value: under
           // 'system' the OS may have changed since the last visit.
           state.theme = resolveTheme(state.themeMode ?? 'system');
+          // A persisted language from an older build may name a locale this
+          // build no longer offers; re-resolve instead of trusting it.
+          state.lang = resolveLocale(state.lang, DEFAULT_LOCALE);
           applyDom(state.theme, state.variant, state.lang);
           applyDensity(state.density);
         }

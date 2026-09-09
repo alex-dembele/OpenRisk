@@ -20,6 +20,7 @@ import {
   formatDate,
 } from './complianceMeta';
 import type { RemediationStatus } from '../../types/compliance';
+import { pickLocalized } from '../../i18n/locales';
 
 export function RemediationDetailPage() {
   const { planId } = useParams<{ planId: string }>();
@@ -75,7 +76,7 @@ export function RemediationDetailPage() {
                 background: `color-mix(in srgb, ${status.color} 14%, transparent)`,
               }}
             >
-              {status[lang]}
+              {pickLocalized(lang, status)}
             </span>
             <span
               className="text-[11.5px] font-semibold px-2 py-[3px] rounded-md"
@@ -84,7 +85,7 @@ export function RemediationDetailPage() {
                 background: `color-mix(in srgb, ${priority.color} 14%, transparent)`,
               }}
             >
-              {priority[lang]}
+              {pickLocalized(lang, priority)}
             </span>
             {overdue && (
               <span
@@ -166,7 +167,7 @@ export function RemediationDetailPage() {
                           : `color-mix(in srgb, ${m.color} 12%, transparent)`,
                       }}
                     >
-                      {m[lang]}
+                      {pickLocalized(lang, m)}
                     </button>
                   );
                 })}
@@ -197,8 +198,8 @@ export function RemediationDetailPage() {
             'The gap it addresses stays open in the gap analysis.',
           )}
           impact={[
-            { label: tr('Statut', 'Status'), value: status?.[lang] ?? plan.status },
-            { label: tr('Priorité', 'Priority'), value: priority?.[lang] ?? plan.priority },
+            { label: tr('Statut', 'Status'), value: pickLocalized(lang, status) ?? plan.status },
+            { label: tr('Priorité', 'Priority'), value: pickLocalized(lang, priority) ?? plan.priority },
             { label: tr('Échéance', 'Due date'), value: formatDate(plan.due_date, lang) },
           ]}
           confirmLabel={tr('Supprimer', 'Delete')}

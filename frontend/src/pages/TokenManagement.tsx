@@ -3,6 +3,7 @@
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Affero General Public License v3.0 (see LICENSE).
 
+import { useFormat } from '../hooks/useI18n';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Key, Trash2, Lock, Copy, Plus, Search, Calendar, ChevronDown } from 'lucide-react';
@@ -32,6 +33,7 @@ interface CreateTokenRequest {
 }
 
 export const TokenManagement = () => {
+  const fmt = useFormat();
   const [tokens, setTokens] = useState<APIToken[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -149,11 +151,7 @@ export const TokenManagement = () => {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    return fmt.date(dateString, { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const isExpiringSoon = (expiresAt?: string) => {

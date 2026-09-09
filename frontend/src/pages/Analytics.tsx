@@ -3,6 +3,7 @@
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Affero General Public License v3.0 (see LICENSE).
 
+import { useFormat } from '../hooks/useI18n';
 import React, { useState, useEffect } from 'react';
 import { CartesianChart, PieChart } from '../shared/ds/charts';
 import { Download, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
@@ -55,6 +56,7 @@ interface DashboardSnapshot {
 }
 
 export default function Analytics() {
+  const fmt = useFormat();
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -264,7 +266,7 @@ export default function Analytics() {
             { type: 'line', key: 'new_risks', label: 'New Risks' },
           ]}
           formatCategory={(d) =>
-            new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            fmt.date(d, { month: 'short', day: 'numeric' })
           }
           ariaLabel="Total risks, average score and new risks over the last 30 days"
         />

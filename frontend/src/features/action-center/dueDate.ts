@@ -7,12 +7,14 @@
 // that exports both a component and a helper breaks Vite's fast refresh, which
 // the react-refresh lint rule enforces at error level.
 
+import { localeTag, type LocaleCode } from '../../i18n/locales';
+
 /** Formats a due date in the active locale, or null when the category has none. */
-export function formatDue(dueAt: string | null | undefined, locale: string): string | null {
+export function formatDue(dueAt: string | null | undefined, locale: LocaleCode): string | null {
   if (!dueAt) return null;
   const date = new Date(dueAt);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB', {
+  return date.toLocaleDateString(localeTag(locale), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

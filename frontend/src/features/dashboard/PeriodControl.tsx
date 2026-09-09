@@ -22,6 +22,7 @@ import { useId, useState } from 'react';
 import { CalendarRange, Check } from 'lucide-react';
 
 import { PERIOD_PRESETS, periodLabel, type PeriodSelection, type PeriodPreset } from './period';
+import type { LocaleCode } from '../../i18n/locales';
 
 export function PeriodControl({
   selection,
@@ -35,7 +36,7 @@ export function PeriodControl({
 }: {
   selection: PeriodSelection;
   onChange: (next: PeriodSelection) => void;
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
   scopeNote: string;
 }) {
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);

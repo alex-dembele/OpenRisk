@@ -17,6 +17,7 @@ import { ScoreGauge } from '../../shared/ScoreGauge';
 import { ScoreExplainer } from '../../shared/ScoreExplainer';
 import { bandColor, bandLabel } from '../../services/scoreService';
 import { ErrorState, SkeletonRows } from '../../shared/ui';
+import type { LocaleCode } from '../../i18n/locales';
 
 export function ScorePage() {
   const navigate = useNavigate();
@@ -162,7 +163,7 @@ function Metric({
   hint: string;
   value: number;
   band: Parameters<typeof bandColor>[0];
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
 }) {
   const color = bandColor(band);
   return (

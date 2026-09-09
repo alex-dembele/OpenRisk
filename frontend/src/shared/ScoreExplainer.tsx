@@ -17,10 +17,12 @@
 //   • inherent and residual are both shown, so "we treated it" is visible as a
 //     delta rather than as an unexplained drop.
 
+import { localeTag } from '../i18n/locales';
 import { useEffect, useState } from 'react';
 import { Info, X, CheckCircle2, MinusCircle } from 'lucide-react';
 
 import { useUIStore } from '../store/uiStore';
+import type { LocaleCode } from '../i18n/locales';
 import {
   bandColor,
   bandLabel,
@@ -275,7 +277,7 @@ function ScoreCard({
   hint: string;
   value: number;
   band: Score['band'];
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
   emphasis?: boolean;
 }) {
   const color = bandColor(band);
@@ -303,7 +305,7 @@ function ScoreCard({
   );
 }
 
-function FactorBar({ factor, max, lang }: { factor: ScoreFactor; max: number; lang: 'fr' | 'en' }) {
+function FactorBar({ factor, max, lang }: { factor: ScoreFactor; max: number; lang: LocaleCode }) {
   const width = Math.max(2, (factor.contribution / max) * 100);
   return (
     <li data-testid={`score-factor-${factor.factor}`}>
@@ -339,10 +341,10 @@ function formatInput(value: unknown): string {
   return String(value);
 }
 
-function formatDate(iso: string, lang: 'fr' | 'en'): string {
+function formatDate(iso: string, lang: LocaleCode): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-GB', {
+  return d.toLocaleString(localeTag(lang), {
     dateStyle: 'short',
     timeStyle: 'short',
   });

@@ -20,10 +20,13 @@ import { useUIStore } from '../../store/uiStore';
 import { useAuthStore } from '../../hooks/useAuthStore';
 import { useMFAPolicy, useSaveMFAPolicy, useMFAStatus } from '../auth/useMfa';
 import { MFAEnrollmentDialog } from '../auth/MFAEnrollmentDialog';
+import { useI18n } from '../../hooks/useI18n';
 
 export function MFAPolicyPanel() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
+  const { t } = useI18n();
+  const dayCount = (n: number) => t('common.days', { count: n });
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canEdit = hasPermission('*');
 
@@ -164,8 +167,8 @@ export function MFAPolicyPanel() {
                     '0 days: MFA is required from the first sign-in for affected accounts.',
                   )
                 : tr(
-                    `Après ${policy.grace_days} jour${policy.grace_days > 1 ? 's' : ''}, les comptes concernés doivent activer le MFA avant de continuer.`,
-                    `After ${policy.grace_days} day${policy.grace_days === 1 ? '' : 's'}, affected accounts must enable MFA before continuing.`,
+                    `Après ${dayCount(policy.grace_days)}, les comptes concernés doivent activer le MFA avant de continuer.`,
+                    `After ${dayCount(policy.grace_days)}, affected accounts must enable MFA before continuing.`,
                   )}
             </div>
             {roles.length > 0 && (

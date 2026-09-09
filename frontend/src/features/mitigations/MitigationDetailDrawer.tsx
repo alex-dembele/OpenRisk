@@ -44,7 +44,7 @@ export const MitigationDetailDrawer = ({
 }: MitigationDetailDrawerProps) => {
   // Esc closes this overlay (spec §2).
   useEscapeToClose(isOpen, onClose);
-  const { t } = useI18n();
+  const { t, fmt } = useI18n();
   const [activeTab, setActiveTab] = useState<
     'overview' | 'sub-actions' | 'evidence' | 'timeline' | 'ai'
   >('overview');
@@ -172,11 +172,7 @@ export const MitigationDetailDrawer = ({
                   <div>
                     <p className="text-xs text-fg-muted mb-1">Échéance</p>
                     <p className="text-sm text-fg-primary">
-                      {new Date(mitigation.due_date).toLocaleDateString('fr-FR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
+                      {fmt.date(mitigation.due_date, { year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                   </div>
 

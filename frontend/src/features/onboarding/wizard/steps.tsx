@@ -25,6 +25,7 @@ import {
 } from '../useActivation';
 import { useCatalogs, useImportCatalogAsFramework } from '../../compliance/useCompliance';
 import { WIZARD_STEPS, stepPath } from './OnboardingWizard';
+import type { LocaleCode } from '../../../i18n/locales';
 
 // ---------------------------------------------------------------------------
 // Shared primitives
@@ -345,7 +346,7 @@ export function ProfileStep() {
   const [fullName, setFullName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-  const [language, setLanguage] = useState<'fr' | 'en'>(lang);
+  const [language, setLanguage] = useState<LocaleCode>(lang);
   const [notifyInApp, setNotifyInApp] = useState(true);
   const [notifyEmail, setNotifyEmail] = useState(true);
 
@@ -418,7 +419,7 @@ export function ProfileStep() {
             className={inputCls}
             style={inputStyle}
             value={language}
-            onChange={(e) => setLanguage(e.target.value as 'fr' | 'en')}
+            onChange={(e) => setLanguage(e.target.value as LocaleCode)}
           >
             <option value="fr">Français</option>
             <option value="en">English</option>

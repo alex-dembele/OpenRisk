@@ -7,6 +7,7 @@
 // Every row is a real document with a real hash. Nothing here is a tile that
 // navigates somewhere else to do the work.
 
+import { localeTag } from '../../i18n/locales';
 import { useState } from 'react';
 import {
   FileText,
@@ -184,7 +185,7 @@ export function ReportsLibraryPage() {
 
                     <div className="text-[12px] text-ink-muted mt-1 flex items-center gap-2 flex-wrap">
                       <span>
-                        {new Date(r.created_at).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-GB')}
+                        {new Date(r.created_at).toLocaleString(localeTag(lang))}
                       </span>
                       {r.requested_by_email ? <span>· {r.requested_by_email}</span> : null}
                       <span>

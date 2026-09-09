@@ -11,6 +11,7 @@
 //
 // See docs/W0-06_SECURITY_COMMAND_CENTER.md for the contract inventory.
 
+import { localeTag } from '../../i18n/locales';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
@@ -57,6 +58,7 @@ import { AuditDashboard } from './AuditDashboard';
 import { EstateDashboard } from './EstateDashboard';
 import { ViewerDashboard } from './ViewerDashboard';
 import { ExecutiveDashboard } from '../analytics/ExecutiveDashboard';
+import type { LocaleCode } from '../../i18n/locales';
 
 const Card = ({
   children,
@@ -181,7 +183,7 @@ function PostureDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [risks]);
 
-  const fmt = (n: number) => Math.round(n).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US');
+  const fmt = (n: number) => Math.round(n).toLocaleString(localeTag(lang));
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -315,7 +317,7 @@ function KpiGrid({
 }: {
   values: { total: number; critical: number; mitig: number; resolved: number };
   fmt: (n: number) => string;
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
   query: StatsQuery;
   openedInPeriod: number;
   selection: PeriodSelection;

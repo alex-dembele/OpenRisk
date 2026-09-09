@@ -32,6 +32,7 @@ import { useMissingEvidence, useCreateEvidence } from './useEvidence';
 import { MISSING_KIND_META } from './evidenceMeta';
 import { CreateEvidenceModal } from './CreateEvidenceModal';
 import type { MissingControl, MissingKind } from '../../types/evidence';
+import { localeTag } from '../../i18n/locales';
 
 const FILTERS: { key: 'all' | MissingKind; fr: string; en: string }[] = [
   { key: 'all', fr: 'Tout', en: 'All' },
@@ -217,7 +218,7 @@ export function MissingEvidencePage() {
                                     {' '}
                                     · {tr('échéance', 'due')}{' '}
                                     {new Date(m.nearest_expiry).toLocaleDateString(
-                                      lang === 'fr' ? 'fr-FR' : 'en-GB',
+                                      localeTag(lang),
                                     )}
                                   </span>
                                 ) : null}

@@ -116,8 +116,9 @@ function useLabels() {
       searchAria: fr ? 'Recherche instantanée' : 'Instant search',
       clearSearch: fr ? 'Effacer la recherche' : 'Clear search',
       filters: fr ? 'Filtres' : 'Filters',
-      results: (n: number) =>
-        fr ? `${n} résultat${n > 1 ? 's' : ''}` : `${n} result${n > 1 ? 's' : ''}`,
+      // Pluralized through the catalogue, not through `n > 1`: English takes the
+      // plural at zero ("0 results"), which the old inline rule got wrong.
+      results: (n: number) => t('common.results', { count: n }),
       reset: fr ? 'Réinitialiser' : 'Reset',
       savedViews: fr ? 'Filtres sauvegardés' : 'Saved filters',
       // #580's strings live in /src/locales rather than inline, so FR/EN parity
@@ -163,7 +164,7 @@ function useLabels() {
       allMatchingSelected: (n: number) =>
         fr ? `Les ${n} résultats sont sélectionnés.` : `All ${n} results are selected.`,
       clearSelection: fr ? 'Effacer la sélection' : 'Clear selection',
-      selected: (n: number) => (fr ? `${n} sélectionné${n > 1 ? 's' : ''}` : `${n} selected`),
+      selected: (n: number) => t('common.selected', { count: n }),
       failed: fr ? 'Échec' : 'Failed',
       actions: fr ? 'Actions' : 'Actions',
       rowsRange: (from: number, to: number, total: number) =>

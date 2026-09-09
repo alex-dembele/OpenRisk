@@ -5,6 +5,7 @@
 // destinations/exports (Board report, Compliance PDFs, risk-register CSV export…),
 // plus a recent-reports list.
 
+import { localeTag } from '../../i18n/locales';
 import {
   TrendingUp,
   FileText,
@@ -260,7 +261,7 @@ export function ReportsScreen() {
                 <div className="text-[13.5px] font-medium text-ink truncate">{r.title}</div>
                 <div className="text-[11.5px] text-ink-muted mt-0.5">
                   {r.period_label} ·{' '}
-                  {new Date(r.created_at).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+                  {new Date(r.created_at).toLocaleDateString(localeTag(lang), {
                     day: '2-digit',
                     month: 'short',
                     year: 'numeric',

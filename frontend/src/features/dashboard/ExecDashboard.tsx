@@ -14,6 +14,7 @@
 // Nothing is rendered now until it has been read. A failure says so, and offers
 // a retry; a genuine zero is still a zero, and is now distinguishable from one.
 
+import { localeTag } from '../../i18n/locales';
 import { useNavigate } from 'react-router';
 import { Coins, AlertTriangle, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { useUIStore } from '../../store/uiStore';
@@ -41,7 +42,7 @@ export function ExecDashboard() {
   const kris = data?.kris ?? [];
 
   const money = (n: number) =>
-    new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', {
+    new Intl.NumberFormat(localeTag(lang), {
       notation: n >= 1_000_000 ? 'compact' : 'standard',
       maximumFractionDigits: 1,
     }).format(n) + ' FCFA';
@@ -147,7 +148,7 @@ export function ExecDashboard() {
                   className="mono text-[22px] font-bold leading-none"
                   style={{ color: KRI_COL[k.severity] ?? 'var(--fg-primary)' }}
                 >
-                  {new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', {
+                  {new Intl.NumberFormat(localeTag(lang), {
                     maximumFractionDigits: 1,
                   }).format(k.value)}
                   {kriUnit(k.unit)}

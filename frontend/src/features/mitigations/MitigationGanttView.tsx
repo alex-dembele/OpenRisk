@@ -3,6 +3,7 @@
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Affero General Public License v3.0 (see LICENSE).
 
+import { useFormat } from '../../hooks/useI18n';
 import { useMemo, memo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type { Mitigation } from '../../types/mitigation';
@@ -19,6 +20,7 @@ export const MitigationGanttView = memo(function MitigationGanttView({
   isLoading = false,
   onRowClick,
 }: MitigationGanttViewProps) {
+  const fmt = useFormat();
   const containerRef = useRef<HTMLDivElement>(null);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -99,7 +101,7 @@ export const MitigationGanttView = memo(function MitigationGanttView({
                     )}
                   >
                     {i % 7 === 0 &&
-                      date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                      fmt.date(date, { day: 'numeric', month: 'short' })}
                   </div>
                 );
               })}

@@ -9,6 +9,7 @@ import { useToast } from '../../hooks/useToast';
 import { useAuthStore } from '../../hooks/useAuthStore';
 import { apiErrorMessage } from '../../lib/apiError';
 import { useAssetSchemas } from './useAssetSchemas';
+import { useI18n } from '../../hooks/useI18n';
 import {
   ASSET_CATEGORIES,
   ATTRIBUTE_TYPES,
@@ -35,6 +36,7 @@ const inputSty = {
  * is validated against, so it is admin-gated and saved as a whole.
  */
 export default function AssetSchemaSettings() {
+  const { t } = useI18n();
   const toast = useToast();
   const isAdmin = useAuthStore((s) => s.hasPermission('*'));
   const { schemas, isLoading, isError, refetch, updateSchema, resetSchema } = useAssetSchemas();
@@ -166,7 +168,7 @@ export default function AssetSchemaSettings() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs" style={{ color: 'var(--fg-muted)' }}>
-              {draft.length} attribut{draft.length > 1 ? 's' : ''}
+              {t('common.attributes', { count: draft.length })}
               {current?.customized ? ' · personnalisé' : ' · par défaut'}
               {current?.version ? ` · v${current.version}` : ''}
             </span>

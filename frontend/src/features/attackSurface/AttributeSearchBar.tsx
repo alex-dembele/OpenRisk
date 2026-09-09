@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { Filter, X } from 'lucide-react';
 import { useAssetSchemas } from './useAssetSchemas';
 import { ASSET_CATEGORIES, CATEGORY_LABELS, type AssetCategory } from './schemaTypes';
+import { useI18n } from '../../hooks/useI18n';
 
 /**
  * Search the inventory by typed attribute.
@@ -29,6 +30,7 @@ export function AttributeSearchBar({
   onChange,
   resultCount,
 }: AttributeSearchBarProps) {
+  const { t } = useI18n();
   const { defsFor } = useAssetSchemas();
   const defs = defsFor(category);
   const [pendingKey, setPendingKey] = useState('');
@@ -165,7 +167,7 @@ export function AttributeSearchBar({
 
         {typeof resultCount === 'number' && (category || activeTerms.length) ? (
           <span className="ml-auto text-[12px]" style={{ color: 'var(--fg-muted)' }}>
-            {resultCount} actif{resultCount > 1 ? 's' : ''}
+            {t('common.assets', { count: resultCount })}
           </span>
         ) : null}
       </div>

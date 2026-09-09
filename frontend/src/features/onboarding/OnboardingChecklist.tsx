@@ -20,6 +20,7 @@ import { Check, ArrowRight, Sparkles, Loader2, LifeBuoy } from 'lucide-react';
 import { useUIStore } from '../../store/uiStore';
 import { i18n, type ActivationStep } from '../../services/activationService';
 import { useActivationState, useCelebrateActivation } from './useActivation';
+import type { LocaleCode } from '../../i18n/locales';
 
 export function OnboardingChecklist() {
   const navigate = useNavigate();
@@ -164,7 +165,7 @@ function StepRow({
   nowLabel,
 }: {
   step: ActivationStep;
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
   isCurrent: boolean;
   onGo: () => void;
   ctaLabel: string;

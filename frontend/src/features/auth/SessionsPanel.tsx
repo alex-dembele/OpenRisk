@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 
 import { useUIStore } from '../../store/uiStore';
 import { DangerConfirm } from '../../shared/DangerConfirm';
+import { localeTag, type LocaleCode } from '../../i18n/locales';
 import {
   listSessions,
   revokeOtherSessions,
@@ -20,7 +21,7 @@ import {
   type SessionRecord,
 } from './authService';
 
-const copyFor = (lang: 'fr' | 'en') =>
+const copyFor = (lang: LocaleCode) =>
   lang === 'en'
     ? {
         title: 'Active sessions',
@@ -76,11 +77,11 @@ const copyFor = (lang: 'fr' | 'en') =>
         unknown: 'inconnue',
       };
 
-function formatWhen(iso: string | undefined, lang: 'fr' | 'en', fallback: string): string {
+function formatWhen(iso: string | undefined, lang: LocaleCode, fallback: string): string {
   if (!iso) return fallback;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return fallback;
-  return d.toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR', {
+  return d.toLocaleString(localeTag(lang), {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
