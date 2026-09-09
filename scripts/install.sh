@@ -91,17 +91,99 @@ $DC up -d --build
 PORT="$(grep -E '^BACKEND_PORT=' .env | cut -d= -f2)"; PORT="${PORT:-8080}"
 FPORT="$(grep -E '^FRONTEND_PORT=' .env | cut -d= -f2)"; FPORT="${FPORT:-3000}"
 log "Waiting for the backend to become healthy on :$PORT ..."
-for i in $(seq 1 60); do
+HEALTHY=0
+for _ in $(seq 1 60); do
   if curl -fsS "http://localhost:${PORT}/api/v1/health" >/dev/null 2>&1; then
-    log "Backend is healthy."
-    log "✅ OpenRisk is up."
-    log "   • App:  http://localhost:${FPORT}"
-    log "   • API:  http://localhost:${PORT}/api/v1"
-    log "   • Logs: (cd deploy/selfhost && $DC logs -f)"
-    exit 0
+    HEALTHY=1
+    break
   fi
   sleep 3
 done
-warn "Backend did not report healthy in time. Inspect logs with:"
-warn "  (cd deploy/selfhost && $DC logs backend)"
-exit 1
+if [ "$HEALTHY" -ne 1 ]; then
+  warn "Backend did not report healthy in time. Inspect logs with:"
+  warn "  (cd deploy/selfhost && $DC logs backend)"
+  exit 1
+fi
+log "Backend is healthy."
+
+# --- 8. The first administrator ----------------------------------------------
+# An install that ends at "the stack is up" is not finished: the operator still
+# has to work out how to get in. This creates the first account and prints its
+# credentials (#328).
+#
+# It goes through the product's OWN public registration endpoint rather than a
+# SQL insert, so the first account is created exactly the way every other account
+# is and cannot drift from the real registration path. That endpoint also creates
+# the organisation and makes this user its root member.
+#
+# The password is generated here, printed ONCE, and written to no file. If you
+# lose it, use the app's password reset, or delete the user and re-run.
+ADMIN_EMAIL="${OPENRISK_ADMIN_EMAIL:-admin@openrisk.local}"
+ADMIN_USERNAME="${OPENRISK_ADMIN_USERNAME:-admin}"
+ADMIN_NAME="${OPENRISK_ADMIN_NAME:-OpenRisk Administrator}"
+ADMIN_ORG="${OPENRISK_ORG_NAME:-My Organization}"
+
+# 32 alphanumeric characters from OpenSSL's CSPRNG (the backend requires >= 12).
+# Deliberately not `tr -dc < /dev/urandom | head -c`: `head` closing the pipe
+# SIGPIPEs its producer, which trips the `set -o pipefail` above.
+gen_password() {
+  local raw
+  raw="$(openssl rand -base64 64 | tr -d '\n+/=')"
+  printf '%s' "${raw:0:32}"
+}
+
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+if [ "${OPENRISK_SKIP_ADMIN:-0}" = "1" ]; then
+  log "OPENRISK_SKIP_ADMIN=1 — not creating an administrator."
+  ADMIN_STATE="skipped"
+else
+  ADMIN_PASSWORD="$(gen_password)"
+  log "Creating the first administrator ..."
+  # The response body carries the new user and organisation; it is discarded
+  # rather than written anywhere.
+  REGISTER_STATUS="$(curl -s -o /dev/null -w '%{http_code}' \
+    -X POST "http://localhost:${PORT}/api/v1/auth/register" \
+    -H 'Content-Type: application/json' \
+    -d "$(printf '{"email":"%s","username":"%s","password":"%s","full_name":"%s","company_name":"%s"}' \
+          "$(json_escape "$ADMIN_EMAIL")" \
+          "$(json_escape "$ADMIN_USERNAME")" \
+          "$ADMIN_PASSWORD" \
+          "$(json_escape "$ADMIN_NAME")" \
+          "$(json_escape "$ADMIN_ORG")")" || true)"
+
+  case "$REGISTER_STATUS" in
+    201)     ADMIN_STATE="created" ;;
+    409)     ADMIN_STATE="exists" ;;
+    *)       ADMIN_STATE="failed" ;;
+  esac
+fi
+
+# --- 9. Tell the operator what they have ------------------------------------
+log "✅ OpenRisk is up."
+log "   • App:  http://localhost:${FPORT}"
+log "   • API:  http://localhost:${PORT}/api/v1"
+log "   • Logs: (cd deploy/selfhost && $DC logs -f)"
+
+case "$ADMIN_STATE" in
+  created)
+    printf '\n'
+    log "Sign in with:"
+    log "   • Email:    ${ADMIN_EMAIL}"
+    log "   • Password: ${ADMIN_PASSWORD}"
+    printf '\n'
+    warn "This password is shown once and stored nowhere. Save it now."
+    ;;
+  exists)
+    log "An account for ${ADMIN_EMAIL} already exists — keeping it, password unchanged."
+    ;;
+  skipped)
+    log "No administrator was created. Register the first account at http://localhost:${FPORT}."
+    ;;
+  *)
+    warn "Could not create the first administrator (HTTP ${REGISTER_STATUS:-no response})."
+    warn "The stack is up: register the first account at http://localhost:${FPORT}."
+    ;;
+esac
+
+exit 0
