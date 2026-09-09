@@ -92,14 +92,23 @@ func (a *AhaRecorder) MaybeRecordAha(ctx context.Context, tenantID uuid.UUID, sc
 		"compliance_gaps": complianceGaps,
 	})
 
-	// Observe signup → Aha. Without a signup anchor there is no honest duration,
-	// so we record the event but observe nothing rather than inventing a t0 that
-	// would flatter the histogram.
+	// Count the tenant here, not inside ObserveTimeToAha. A tenant with no signup
+	// anchor has still reached the Aha; counting it only alongside the duration
+	// dropped exactly those tenants from the activation rate (D-010).
+	monitoring.CountAhaReached()
+
+	// Observe signup → Aha under the v1 definition. Without a signup anchor there
+	// is no honest duration, so we record the event but observe nothing rather
+	// than inventing a t0 that would flatter the histogram.
+	//
+	// v1 is this definition and only this one. When the Posture Reveal ships it
+	// observes AhaDefinitionV2 from its own call site; the two series are never
+	// mixed, because the durations they measure are not comparable (D-010).
 	firsts, err := a.repo.FirstOccurrences(ctx, tenantID)
 	if err != nil {
 		return
 	}
 	if signup, ok := firsts[domain.ActivationSignup]; ok {
-		monitoring.ObserveTimeToAha(reachedAt.Sub(signup))
+		monitoring.ObserveTimeToAha(monitoring.AhaDefinitionV1, reachedAt.Sub(signup))
 	}
 }

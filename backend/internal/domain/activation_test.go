@@ -39,6 +39,63 @@ func TestActivationSteps_ExcludeNonStepEvents(t *testing.T) {
 	}
 }
 
+// D-011: the sibling assertion to ValidateActivationSteps. It answers the
+// opposite question — not "does every step own one key?" but "has a key that is
+// never a chore leaked into the catalogue?".
+func TestValidateNonChecklistEventKeys(t *testing.T) {
+	if err := ValidateNonChecklistEventKeys(); err != nil {
+		t.Fatalf("catalogue holds a non-checklist event key: %v", err)
+	}
+
+	// posture.revealed is the key #438 adds; the wire value is what the reveal
+	// and the E2E suite match on, so it is asserted literally.
+	if ActivationPostureRevealed != "posture.revealed" {
+		t.Errorf("posture event key = %q, want %q", ActivationPostureRevealed, "posture.revealed")
+	}
+
+	keys := NonChecklistEventKeys()
+	want := map[ActivationEventKey]bool{
+		ActivationSignup:          false,
+		ActivationAhaReached:      false,
+		ActivationPostureRevealed: false,
+	}
+	for _, k := range keys {
+		if _, known := want[k]; !known {
+			t.Errorf("unexpected non-checklist key %q", k)
+			continue
+		}
+		want[k] = true
+	}
+	for k, seen := range want {
+		if !seen {
+			t.Errorf("%q must be declared non-checklist", k)
+		}
+	}
+}
+
+// The failure the assertion exists to catch: a later edit adds a checklist row
+// bound to a server-observed outcome. ValidateActivationSteps stays happy — the
+// bijection still holds — and the panel shows a row nobody can act on.
+func TestValidateNonChecklistEventKeys_CatchesALeakedKey(t *testing.T) {
+	original := activationSteps
+	t.Cleanup(func() { activationSteps = original })
+
+	activationSteps = append(append([]ActivationStepDef{}, original...), ActivationStepDef{
+		Key:       "posture",
+		EventKey:  ActivationPostureRevealed,
+		LabelI18n: map[string]string{"fr": "Voyez votre posture", "en": "See your posture"},
+		DeepLink:  "/posture",
+		Order:     len(original) + 1,
+	})
+
+	if err := ValidateActivationSteps(); err != nil {
+		t.Fatalf("precondition: the bijection must still hold, got %v", err)
+	}
+	if err := ValidateNonChecklistEventKeys(); err == nil {
+		t.Error("a checklist step bound to posture.revealed must be rejected")
+	}
+}
+
 // ActivationSteps hands out a copy: a caller mutating the result must not be able
 // to corrupt the catalog for everyone else.
 func TestActivationSteps_ReturnsCopy(t *testing.T) {

@@ -57,7 +57,31 @@ const (
 	// dashboard use case the first time a cyber score is computed on the tenant's
 	// OWN data while at least one compliance gap is identified.
 	ActivationAhaReached ActivationEventKey = "aha.reached"
+
+	// ActivationPostureRevealed is NOT a checklist step either: it is recorded
+	// server-side when the Posture Reveal renders a posture summary computed from
+	// the tenant's own rows (#438, D-011). It is the v2 Aha definition — the
+	// endpoint the time-to-value promise is measured against.
+	//
+	// Named `ActivationPostureRevealed` rather than D-011's `EventKeyPostureRevealed`
+	// so it reads like every other key in this block; the wire value
+	// "posture.revealed" is exactly what D-011 specified.
+	//
+	// Deliberately NOT added to activationSteps: it is a server-observed outcome,
+	// not a user chore, and putting it in the panel would show the user a row they
+	// cannot act on. ValidateNonChecklistEventKeys() is what keeps a later edit
+	// from quietly promoting it.
+	ActivationPostureRevealed ActivationEventKey = "posture.revealed"
 )
+
+// nonChecklistEventKeys are the event keys that must never be bound to a
+// checklist step: anchors (signup) and server-observed outcomes (aha.reached,
+// posture.revealed).
+var nonChecklistEventKeys = []ActivationEventKey{
+	ActivationSignup,
+	ActivationAhaReached,
+	ActivationPostureRevealed,
+}
 
 // ActivationEvent is one immutable occurrence. The table is append-only: the same
 // key may be recorded many times (a tenant creates many risks) and the read model
@@ -270,6 +294,39 @@ func ValidateActivationSteps() error {
 		}
 	}
 	return nil
+}
+
+// ValidateNonChecklistEventKeys is the sibling assertion to
+// ValidateActivationSteps (D-011). The two answer different questions and
+// neither implies the other:
+//
+//   - ValidateActivationSteps: every step in the catalogue maps to exactly one
+//     event key. It iterates the catalogue and is deliberately left untouched.
+//   - this one: no anchor or server-observed outcome has leaked INTO the
+//     catalogue. That is the direction a future edit breaks — someone adds a
+//     "see your posture" row to the checklist, binds it to posture.revealed, and
+//     the bijection still holds while the panel now shows a row the user cannot
+//     act on.
+//
+// Called by a test; cheap enough to call at boot if ever wanted.
+func ValidateNonChecklistEventKeys() error {
+	for _, key := range nonChecklistEventKeys {
+		for _, s := range activationSteps {
+			if s.EventKey == key {
+				return NewValidationError("activation step " + s.Key +
+					" is bound to the non-checklist event key " + string(key))
+			}
+		}
+	}
+	return nil
+}
+
+// NonChecklistEventKeys returns a copy of the keys that are recorded but never
+// shown as a checklist row.
+func NonChecklistEventKeys() []ActivationEventKey {
+	out := make([]ActivationEventKey, len(nonChecklistEventKeys))
+	copy(out, nonChecklistEventKeys)
+	return out
 }
 
 // ---------------------------------------------------------------------------
