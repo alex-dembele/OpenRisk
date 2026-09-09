@@ -62,26 +62,59 @@ else
 fi
 
 # --- 5. .env with strong random secrets -------------------------------------
+# set_kv is defined outside the block below so it can also fill a key that an
+# older install predates, without rewriting that install's other settings.
+set_kv() { # key value
+  if grep -q "^$1=" .env; then
+    # Use a temp file so any char in $2 is safe.
+    awk -v k="$1" -v v="$2" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' .env > .env.tmp && mv .env.tmp .env
+  else
+    printf '%s=%s\n' "$1" "$2" >> .env
+  fi
+}
+
+# 32 alphanumeric characters from OpenSSL's CSPRNG (the backend requires >= 12
+# and three character classes). Deliberately not `tr -dc < /dev/urandom | head`:
+# head closing the pipe SIGPIPEs its producer, which trips `set -o pipefail`.
+gen_password() {
+  local raw
+  raw="$(openssl rand -base64 64 | tr -d '\n+/=')"
+  printf '%s' "${raw:0:32}"
+}
+
 if [ ! -f .env ]; then
   log "Creating .env with generated secrets ..."
   cp .env.example .env
-  # Fill the empty required fields with generated values (portable sed).
-  set_kv() { # key value
-    if grep -q "^$1=" .env; then
-      # Use a temp file so any char in $2 is safe.
-      awk -v k="$1" -v v="$2" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' .env > .env.tmp && mv .env.tmp .env
-    else
-      printf '%s=%s\n' "$1" "$2" >> .env
-    fi
-  }
   set_kv DB_PASSWORD "$(rand_hex 24)"
   set_kv MFA_ENCRYPTION_KEY "$(rand_hex 32)"       # 32 bytes hex → 64 chars; backend takes 32 bytes
   set_kv SCANNER_CREDENTIAL_KEY "$(rand_b64_32)"
   set_kv AUDIT_EXPORT_KEY "$(rand_b64_32)"
-  chmod 600 .env
 else
   log ".env already present — keeping your configuration."
 fi
+
+# The first administrator.
+#
+# APP_ENV is `production` in the self-hosted compose, and in production the
+# backend REFUSES TO BOOT rather than seed a publicly-known default password
+# (handler.SeedAdminUser). Without this the container fatally restart-loops on a
+# fresh database, which is why the install never completed (#328).
+#
+# So the password is generated here and stored in .env, next to DB_PASSWORD and
+# the encryption keys, with the same 0600. On the first boot — and only then,
+# because the seeder runs when the users table is empty — the backend creates
+# the administrator with it, together with an organisation and a root
+# membership, so the account can actually sign in.
+#
+# It is generated ONCE and then kept: regenerating it on a re-run would print a
+# password that no longer matches the seeded account.
+if ! grep -qE '^INITIAL_ADMIN_PASSWORD=.+' .env; then
+  set_kv INITIAL_ADMIN_PASSWORD "$(gen_password)"
+  ADMIN_IS_NEW=1
+else
+  ADMIN_IS_NEW=0
+fi
+chmod 600 .env
 
 # --- 6. Bring the stack up ---------------------------------------------------
 log "Building and starting the stack (this can take a few minutes on first run) ..."
@@ -106,84 +139,26 @@ if [ "$HEALTHY" -ne 1 ]; then
 fi
 log "Backend is healthy."
 
-# --- 8. The first administrator ----------------------------------------------
-# An install that ends at "the stack is up" is not finished: the operator still
-# has to work out how to get in. This creates the first account and prints its
-# credentials (#328).
-#
-# It goes through the product's OWN public registration endpoint rather than a
-# SQL insert, so the first account is created exactly the way every other account
-# is and cannot drift from the real registration path. That endpoint also creates
-# the organisation and makes this user its root member.
-#
-# The password is generated here, printed ONCE, and written to no file. If you
-# lose it, use the app's password reset, or delete the user and re-run.
-ADMIN_EMAIL="${OPENRISK_ADMIN_EMAIL:-admin@openrisk.local}"
-ADMIN_USERNAME="${OPENRISK_ADMIN_USERNAME:-admin}"
-ADMIN_NAME="${OPENRISK_ADMIN_NAME:-OpenRisk Administrator}"
-ADMIN_ORG="${OPENRISK_ORG_NAME:-My Organization}"
+# --- 8. Tell the operator what they have ------------------------------------
+# An install that stops at "the stack is up" is not finished: the operator still
+# has to work out how to get in.
+ADMIN_EMAIL="admin@opendefender.io"   # fixed by handler.SeedAdminUser
+ADMIN_PASSWORD="$(grep -E '^INITIAL_ADMIN_PASSWORD=' .env | cut -d= -f2-)"
 
-# 32 alphanumeric characters from OpenSSL's CSPRNG (the backend requires >= 12).
-# Deliberately not `tr -dc < /dev/urandom | head -c`: `head` closing the pipe
-# SIGPIPEs its producer, which trips the `set -o pipefail` above.
-gen_password() {
-  local raw
-  raw="$(openssl rand -base64 64 | tr -d '\n+/=')"
-  printf '%s' "${raw:0:32}"
-}
-
-json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
-if [ "${OPENRISK_SKIP_ADMIN:-0}" = "1" ]; then
-  log "OPENRISK_SKIP_ADMIN=1 — not creating an administrator."
-  ADMIN_STATE="skipped"
-else
-  ADMIN_PASSWORD="$(gen_password)"
-  log "Creating the first administrator ..."
-  # The response body carries the new user and organisation; it is discarded
-  # rather than written anywhere.
-  REGISTER_STATUS="$(curl -s -o /dev/null -w '%{http_code}' \
-    -X POST "http://localhost:${PORT}/api/v1/auth/register" \
-    -H 'Content-Type: application/json' \
-    -d "$(printf '{"email":"%s","username":"%s","password":"%s","full_name":"%s","company_name":"%s"}' \
-          "$(json_escape "$ADMIN_EMAIL")" \
-          "$(json_escape "$ADMIN_USERNAME")" \
-          "$ADMIN_PASSWORD" \
-          "$(json_escape "$ADMIN_NAME")" \
-          "$(json_escape "$ADMIN_ORG")")" || true)"
-
-  case "$REGISTER_STATUS" in
-    201)     ADMIN_STATE="created" ;;
-    409)     ADMIN_STATE="exists" ;;
-    *)       ADMIN_STATE="failed" ;;
-  esac
-fi
-
-# --- 9. Tell the operator what they have ------------------------------------
 log "✅ OpenRisk is up."
 log "   • App:  http://localhost:${FPORT}"
 log "   • API:  http://localhost:${PORT}/api/v1"
 log "   • Logs: (cd deploy/selfhost && $DC logs -f)"
-
-case "$ADMIN_STATE" in
-  created)
-    printf '\n'
-    log "Sign in with:"
-    log "   • Email:    ${ADMIN_EMAIL}"
-    log "   • Password: ${ADMIN_PASSWORD}"
-    printf '\n'
-    warn "This password is shown once and stored nowhere. Save it now."
-    ;;
-  exists)
-    log "An account for ${ADMIN_EMAIL} already exists — keeping it, password unchanged."
-    ;;
-  skipped)
-    log "No administrator was created. Register the first account at http://localhost:${FPORT}."
-    ;;
-  *)
-    warn "Could not create the first administrator (HTTP ${REGISTER_STATUS:-no response})."
-    warn "The stack is up: register the first account at http://localhost:${FPORT}."
-    ;;
-esac
+printf '\n'
+log "Sign in with:"
+log "   • Email:    ${ADMIN_EMAIL}"
+log "   • Password: ${ADMIN_PASSWORD}"
+printf '\n'
+if [ "$ADMIN_IS_NEW" -eq 1 ]; then
+  warn "Change this password on first login. It is stored in deploy/selfhost/.env (0600)."
+else
+  log "(Unchanged from your existing install. If you have already changed it in the"
+  log " app, the value in .env is stale and the app is right.)"
+fi
 
 exit 0

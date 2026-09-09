@@ -1,0 +1,21 @@
+# Build context hygiene for the backend image.
+# Keys must NEVER enter a build context — they are gitignored and per-install.
+keys/
+secrets/
+*.pem
+*.key
+
+# Runtime data and local build artifacts.
+uploads/
+openrisk-server
+openrisk
+server
+
+# Tests and docs are not needed to compile the binary.
+tests/
+*_test.go
+*.md
+
+# Local env files.
+.env
+.env.*
