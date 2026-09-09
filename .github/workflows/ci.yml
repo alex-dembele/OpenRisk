@@ -56,6 +56,13 @@ jobs:
       - name: Run unit tests
         run: cd backend && go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
+      # docs/PRICING.md is a public price list that claims to be derived from
+      # pkg/entitlements. It lives OUTSIDE the Go module, so the test cache
+      # cannot see it change and an edited price would pass from cache —
+      # `-count=1` is what makes this gate real (#415).
+      - name: Published price list still matches the enforced matrix
+        run: cd backend && go test -count=1 ./pkg/entitlements/ -run 'TestPricingDoc|TestSelfHostDoc'
+
       - name: Check coverage threshold (50%)
         run: |
           cd backend
