@@ -5,7 +5,23 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-None. Every entry in this register is resolved as of 2026-09-07.
+### D-039 — should `master` refuse a merge while CI is red? · raised 2026-09-09
+**Context** — #608 found `npm run build` broken on `master`. The gate that
+should have caught it was not missing: `frontend-typecheck` in `.github/
+workflows/ci.yml` **ran and failed** on PR #601's branch (run 34209169493 —
+Frontend Typecheck: failure, Build Frontend: skipped), and the PR was merged
+anyway. Six of that run's twelve jobs were red.
+**So the fix for #608 is not a new CI step.** The step exists and worked. What
+is missing is anything that makes a red run block a merge.
+**Options** — (A) branch protection on `master` requiring `CI Status` green;
+(B) required reviewers plus a manual rule; (C) leave it, and accept that the
+owner reads CI before merging.
+**Cost of delay** — this already cost one broken `master` and one P0. The next
+one is silent until someone tries to build.
+**Recommendation** — (A). It is a repository setting, it is reversible, and it
+costs nothing when CI is green. It needs the owner: an agent cannot change
+branch protection, and turning it on will block merges that are red today.
+
 
 ## Resolved
 
