@@ -37,6 +37,8 @@ tags:
     description: Data export
   - name: Gamification
     description: Gamification and user profiles
+  - name: Saved Views
+    description: Named filter/sort/column views of a register (#580)
 
 paths:
   /health:
@@ -2345,6 +2347,145 @@ paths:
         '404': {description: An id did not resolve — absent, or another tenant's, deliberately indistinguishable. Nothing was modified.}
         '409': {description: The selection changed since it was previewed. Nothing was modified.}
 
+  # ==================== SAVED VIEWS (#580) ====================
+  # A saved view is a named filter/sort/column combination for one register.
+  # It grants no access to data: applying one still runs the register's own
+  # query under the caller's own permissions. Every route derives the tenant and
+  # the user from the signed session — never from the body or the query string.
+  /saved-views:
+    get:
+      tags:
+        - Saved Views
+      summary: List the saved views the caller may see
+      operationId: listSavedViews
+      description: >-
+        The caller's own views for a register, plus every view their tenant has
+        shared. A personal view belonging to another user is never returned, not
+        even to a tenant admin. Omitting `table_id` returns the views of every
+        register, which is what the one-time localStorage migration reads.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: table_id
+          in: query
+          required: false
+          description: >-
+            The register the views belong to — the same id the table is mounted
+            with ("risks", "vulnerabilities", "assets", …). Omit for all of them.
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: The views this caller may see, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedView'
+        '401':
+          description: Unauthorized
+    post:
+      tags:
+        - Saved Views
+      summary: Save a new view of a register
+      operationId: createSavedView
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSavedViewInput'
+      responses:
+        '201':
+          description: The view as stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedView'
+        '400':
+          description: >-
+            Invalid body, or a value outside its bounds — name over 120
+            characters, table_id over 64, more than 40 facets, more than 200
+            values in one facet, or more than 200 columns.
+        '401':
+          description: Unauthorized
+        '409':
+          description: This user already has a view of that name on that register.
+
+  /saved-views/{id}:
+    patch:
+      tags:
+        - Saved Views
+      summary: Rename, re-share or re-point a saved view
+      operationId: updateSavedView
+      description: >-
+        A patch: an absent field is left alone, so renaming a view cannot
+        silently reset its filters. Only the view's owner, or a tenant admin,
+        may change it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSavedViewInput'
+      responses:
+        '200':
+          description: The view as stored after the patch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedView'
+        '400':
+          description: Invalid id, invalid body, or a value outside its bounds.
+        '401':
+          description: Unauthorized
+        '403':
+          description: The caller neither owns this view nor administers the tenant.
+        '404':
+          description: >-
+            No such view for this tenant. An id belonging to another tenant
+            answers identically, deliberately: a 403 would confirm it exists.
+        '409':
+          description: This user already has another view of that name on that register.
+    delete:
+      tags:
+        - Saved Views
+      summary: Delete a saved view
+      operationId: deleteSavedView
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted. Soft-deleted server-side; it does not come back.
+        '400':
+          description: Invalid id.
+        '401':
+          description: Unauthorized
+        '403':
+          description: The caller neither owns this view nor administers the tenant.
+        '404':
+          description: No such view for this tenant.
+
 # ==================== COMPONENTS ====================
 components:
   securitySchemes:
@@ -4126,6 +4267,165 @@ components:
           description: >-
             Audit entries written. Below `applied` only if the trail was
             unavailable; the mutation still happened and the gap is reported.
+
+    # ========== SAVED VIEWS (#580) ==========
+    SavedViewVisibility:
+      type: string
+      enum: [personal, shared]
+      description: >-
+        `personal` — only its owner sees it. `shared` — every member of the same
+        tenant sees it. Sharing never crosses a tenant, and there is nothing in
+        between on purpose: a view shared with a named subset of people is a
+        permissions design, not a table feature.
+
+    SavedViewSort:
+      type: object
+      required: [key, dir]
+      properties:
+        key:
+          type: string
+          description: The column the view sorts on.
+        dir:
+          type: string
+          enum: [asc, desc]
+
+    SavedViewState:
+      type: object
+      description: >-
+        The part of the table state a view restores. Page and page size are
+        deliberately absent — "page 3" is not part of what a view means.
+      required: [q, filters, sort]
+      properties:
+        q:
+          type: string
+          description: The instant search term. Empty when the view carries none.
+        filters:
+          type: [object, 'null']
+          description: >-
+            Facet key → selected values. Null when the view carries no facet
+            selection at all. At most 40 facets, each with at most 200 values.
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        sort:
+          oneOf:
+            - $ref: '#/components/schemas/SavedViewSort'
+            - type: 'null'
+          description: Null when the view does not pin a sort.
+
+    SavedViewColumns:
+      type: object
+      description: >-
+        The column layout the view restores. Keys the current build does not
+        know are dropped on read rather than rejected, so a view saved before a
+        column was removed still opens. At most 200 entries per list.
+      required: [order, hidden]
+      properties:
+        order:
+          type: [array, 'null']
+          items:
+            type: string
+        hidden:
+          type: [array, 'null']
+          items:
+            type: string
+
+    SavedView:
+      type: object
+      description: >-
+        One named view of one register, owned by one user inside one tenant.
+        Server-side since #580, so it survives a browser and can be handed to a
+        colleague. A usability capability, not a compliance control.
+      required:
+        - id
+        - tenant_id
+        - user_id
+        - table_id
+        - name
+        - visibility
+        - state
+        - columns
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          description: The owning tenant. Every read of this resource filters on it.
+        user_id:
+          type: string
+          format: uuid
+          description: The owner — the only person who may edit it, plus tenant admins.
+        table_id:
+          type: string
+          maxLength: 64
+          description: >-
+            The register the view belongs to. A free string on purpose: the
+            eighth register does not need a migration.
+          example: risks
+        name:
+          type: string
+          maxLength: 120
+        visibility:
+          $ref: '#/components/schemas/SavedViewVisibility'
+        state:
+          $ref: '#/components/schemas/SavedViewState'
+        columns:
+          $ref: '#/components/schemas/SavedViewColumns'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        owner_email:
+          type: string
+          description: >-
+            Resolved on read for display ("shared by Amina"). Not a column, and
+            absent when the server could not resolve a name.
+
+    CreateSavedViewInput:
+      type: object
+      required: [table_id, name]
+      properties:
+        table_id:
+          type: string
+          maxLength: 64
+          example: risks
+        name:
+          type: string
+          maxLength: 120
+        visibility:
+          $ref: '#/components/schemas/SavedViewVisibility'
+          description: >-
+            Defaults to `personal` when omitted. Sharing is an explicit act: a
+            default of shared would publish one user's working view to their
+            whole institution.
+        state:
+          $ref: '#/components/schemas/SavedViewState'
+        columns:
+          $ref: '#/components/schemas/SavedViewColumns'
+
+    UpdateSavedViewInput:
+      type: object
+      description: >-
+        A patch. Every field is optional and an absent one is left untouched, so
+        renaming a view cannot silently reset its filters. A present `state` or
+        `columns` replaces the stored one whole.
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        visibility:
+          $ref: '#/components/schemas/SavedViewVisibility'
+        state:
+          $ref: '#/components/schemas/SavedViewState'
+        columns:
+          $ref: '#/components/schemas/SavedViewColumns'
 
     ErrorResponse:
       type: object
