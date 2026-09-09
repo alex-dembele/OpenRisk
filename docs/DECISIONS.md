@@ -5,7 +5,38 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-None. Every entry in this register is resolved as of 2026-09-07.
+### D-037 — English date order: `en-US` everywhere, or `en-GB`? · raised 2026-09-08
+**Context** — #315 gave every locale exactly one BCP-47 tag in
+`frontend/src/i18n/locales.ts`. Before it, English dates were formatted as
+`en-GB` on fifteen screens and `en-US` on nine, so the same product showed
+`12/03/2026` and `03/12/2026` for the same day depending on which page you were
+on. Centralizing forces one answer.
+**Chosen while waiting** — `en` → `en-US`. It matches the majority of the
+existing sites and the USA is a named market in CLAUDE.md. The change is live on
+the #315 branch.
+**Cost of the alternative** — `en-GB` is the day-first order Belgium, Canada,
+the Maghreb and Sub-Saharan Africa read, and it matches French, so a bilingual
+user switching languages would not see the digits reorder. Switching is a
+one-character edit to `LOCALES.en.tag` plus the two assertions in
+`frontend/src/i18n/__tests__/format.test.ts`.
+**Cost of delay** — near zero now, real once customers have screenshots and
+exported reports in circulation.
+**Recommendation** — keep `en-US` unless a launch customer is UK/Commonwealth.
+
+### D-038 — should a first visit follow the browser's language? · raised 2026-09-08
+**Context** — the registry gained `negotiateLocale()`, which picks the best
+offered language out of an `Accept-Language`-shaped list, with q-weights. It is
+implemented and tested. Wiring it to `navigator.languages` was **reverted** on
+#315 before commit: it changed the first-visit default from French to English on
+any English-configured machine, which is a product decision, not a refactor.
+**Chosen while waiting** — first visit stays French, as designed. A stored
+preference always wins.
+**Options** — (A) keep French always; (B) negotiate from the browser and fall
+back to French; (C) negotiate only when the tenant has no declared default.
+**Cost of delay** — none. The function is already there; wiring it is three
+lines in `frontend/src/store/uiStore.ts`.
+**Recommendation** — (A) until the marketing site reports meaningful non-French
+first-touch traffic; the current default is right for the primary market.
 
 ## Resolved
 

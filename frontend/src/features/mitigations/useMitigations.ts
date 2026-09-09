@@ -3,6 +3,8 @@
 //
 // Real /mitigations list shaped into the dc.html Kanban columns.
 
+import { DEFAULT_LOCALE, formatDate, type LocaleCode } from '../../i18n';
+import { useUIStore } from '../../store/uiStore';
 import { useQuery } from '@tanstack/react-query';
 import { mitigationService } from '../../services/mitigationService';
 import type { Mitigation } from '../../types/mitigation';
@@ -44,15 +46,17 @@ const CRIT: Record<string, Criticality> = {
   low: 'low',
 };
 
-function fmtDate(iso?: string): string {
+function fmtDate(iso: string | undefined, locale: LocaleCode): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+  return formatDate(locale, iso, { day: '2-digit', month: 'short' });
 }
 
-export function mapMitigation(m: Mitigation): UiMiti {
+/**
+ * `locale` is explicit rather than read from the store: this mapper runs inside
+ * a query function, where a hook cannot. The caller passes the active language
+ * and the query key carries it, so switching language refetches the labels.
+ */
+export function mapMitigation(m: Mitigation, locale: LocaleCode = DEFAULT_LOCALE): UiMiti {
   const mm = m as Mitigation & {
     assignee?: string;
     risk_title?: string;
@@ -66,7 +70,7 @@ export function mapMitigation(m: Mitigation): UiMiti {
     title: m.title,
     risk: mm.risk_title || (m.risk_id ? `#${m.risk_id.slice(0, 8)}` : '—'),
     owner: initialsOf(mm.assignee),
-    deadline: fmtDate(m.due_date),
+    deadline: fmtDate(m.due_date, locale),
     // Backend serialises the field as `progress`; keep the legacy fallback.
     progress: mm.progress ?? m.progress_percentage ?? 0,
     crit: CRIT[(m.priority ?? 'low').toLowerCase()] ?? 'low',
@@ -80,11 +84,14 @@ export function mapMitigation(m: Mitigation): UiMiti {
 }
 
 export function useMitigations() {
+  const locale = useUIStore((s) => s.lang);
   const query = useQuery({
-    queryKey: ['mitigations', 'board'],
+    // The locale is part of the key: the mapper bakes formatted dates into the
+    // rows, so a language switch has to produce a different cache entry.
+    queryKey: ['mitigations', 'board', locale],
     queryFn: async () => {
       const res = await mitigationService.listMitigations({ page: 1, per_page: 200 });
-      return (res.items ?? []).map(mapMitigation);
+      return (res.items ?? []).map((m) => mapMitigation(m, locale));
     },
   });
   const items = query.data ?? [];

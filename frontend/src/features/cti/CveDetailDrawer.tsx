@@ -3,6 +3,7 @@
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Affero General Public License v3.0 (see LICENSE).
 
+import { localeTag, type LocaleCode } from '../../i18n/locales';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, ShieldAlert, X } from 'lucide-react';
 import { SkeletonRows } from '../../shared/ui';
@@ -142,7 +143,7 @@ export function CveDetailDrawer({
                 <Section title={tr('Échéance CISA', 'CISA due date')}>
                   <p className="text-[13px]" style={{ color: 'var(--critical)' }}>
                     {new Date(v.cisa_due_date).toLocaleDateString(
-                      lang === 'fr' ? 'fr-FR' : 'en-GB',
+                      localeTag(lang),
                     )}
                   </p>
                 </Section>
@@ -226,8 +227,8 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function fmtDate(iso: string | undefined, lang: string): string {
+function fmtDate(iso: string | undefined, lang: LocaleCode): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB');
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(localeTag(lang));
 }

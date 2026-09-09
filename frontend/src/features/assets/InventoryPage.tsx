@@ -51,6 +51,7 @@ import { AttributeSearchBar } from '../attackSurface/AttributeSearchBar';
 import { CATEGORY_LABELS, type AssetCategory } from '../attackSurface/schemaTypes';
 import type { Asset } from '../../types/asset';
 import { BulkPreviewDialog, useGovernedBulk, type BulkChangeInput } from '../../shared/bulk';
+import type { LocaleCode } from '../../i18n/locales';
 
 const TYPE_ICON: Record<string, LucideIcon> = {
   Server: Server,
@@ -102,7 +103,7 @@ function isAssetList(cached: unknown): cached is Asset[] {
   return Array.isArray(cached) && cached.every((a) => typeof a === 'object' && a !== null && 'id' in a);
 }
 
-const t = (lang: 'fr' | 'en', fr: string, en: string) => (lang === 'fr' ? fr : en);
+const t = (lang: LocaleCode, fr: string, en: string) => (lang === 'fr' ? fr : en);
 
 export function InventoryPage() {
   const L = useUIStrings();

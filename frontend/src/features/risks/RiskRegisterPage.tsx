@@ -12,6 +12,8 @@
 // view. The right-side drawer (Details / Lifecycle / Score / Financial / …)
 // is unchanged.
 
+import { useFormat } from '../../hooks/useI18n';
+import { localeTag } from '../../i18n/locales';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -98,6 +100,7 @@ import { ownershipPatch, type OwnershipRole } from '../../services/ownershipServ
 import { mappingHref, mappingLabel } from '../../services/taxonomyService';
 import { ctiService } from '../cti/ctiService';
 import { useQueryClient } from '@tanstack/react-query';
+import type { LocaleCode } from '../../i18n/locales';
 
 /* -------------------------------------------------------------- CSV export */
 
@@ -1107,7 +1110,7 @@ function DrawerCTI({ r }: { r: UiRisk }) {
       {data.cisa_known && data.cisa_due_date && (
         <Fact
           label={tr('Échéance CISA', 'CISA due date')}
-          value={new Date(data.cisa_due_date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB')}
+          value={new Date(data.cisa_due_date).toLocaleDateString(localeTag(lang))}
         />
       )}
       {!!data.mitre_tactics?.length && (
@@ -1734,7 +1737,7 @@ function DrawerSmart({ r }: { r: UiRisk }) {
 // renders GET /risks/:id/transitions verbatim, blockers included.
 
 /** State pill for the register row, from the single canonical lifecycle. */
-function PhasePill({ phase, lang }: { phase: RiskPhase; lang: 'fr' | 'en' }) {
+function PhasePill({ phase, lang }: { phase: RiskPhase; lang: LocaleCode }) {
   const closed = phase === 'closed';
   const col = closed ? 'var(--fg-secondary)' : 'var(--accent)';
   const labels: Record<RiskPhase, [string, string]> = {
@@ -1800,11 +1803,14 @@ function DrawerFinancial({ r }: { r: UiRisk }) {
     raw.mitigation_effectiveness != null ? Number(raw.mitigation_effectiveness) : 0,
   );
   const [busy, setBusy] = useState(false);
+  const fmt = useFormat();
 
+  // Money goes through `Intl` in the reader's locale: XAF prints "FCFA" with no
+  // minor unit and USD prints "$" with cents suppressed, in both languages.
   const fmtXAF = (v?: number) =>
-    v == null ? '—' : `${Math.round(v).toLocaleString('fr-FR')} FCFA`;
+    v == null ? '—' : fmt.currency(Math.round(v), { currency: 'XAF' });
   const fmtUSD = (v?: number) =>
-    v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    v == null ? '—' : fmt.currency(v, { currency: 'USD', fractionDigits: 0 });
   const fmtPct = (ratio: number) => `${ratio >= 0 ? '+' : ''}${Math.round(ratio * 100)}%`;
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
 

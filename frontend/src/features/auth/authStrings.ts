@@ -460,11 +460,12 @@ const en: AuthCopy = {
     `This address already signs in with ${existing}. Use ${existing} or your password.`,
 };
 
-const BUNDLES: Record<Lang, AuthCopy> = { fr, en };
+// Partial: a registered language without auth copy falls back in `authCopy`.
+const BUNDLES: Partial<Record<Lang, AuthCopy>> = { fr, en };
 
 /** The auth copy for a language. */
 export function authCopy(lang: Lang): AuthCopy {
-  return BUNDLES[lang] ?? BUNDLES.fr;
+  return BUNDLES[lang] ?? fr;
 }
 
 /** Human label for a zxcvbn score, 0..4. */

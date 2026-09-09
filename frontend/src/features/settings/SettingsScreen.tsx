@@ -67,6 +67,9 @@ import { BillingPanel } from '../billing/BillingPanel';
 import { DangerZonePanel } from '../billing/DangerZonePanel';
 import { useOrganization } from '../organization/useOrganization';
 import { MFAPolicyPanel, MFAAccountPanel } from './MFAPolicyPanel';
+import type { LocaleCode } from '../../i18n/locales';
+import { useI18n } from '../../hooks/useI18n';
+import { localeTag } from '../../i18n/locales';
 
 type TabKey =
   | 'general'
@@ -371,7 +374,7 @@ function copyPrefix(prefix: string, tr: Tr) {
     .catch(() => toast.error(tr('Copie impossible', 'Could not copy')));
 }
 
-function TokensTab({ tr, lang }: { tr: Tr; lang: 'fr' | 'en' }) {
+function TokensTab({ tr, lang }: { tr: Tr; lang: LocaleCode }) {
   const { tokens, isLoading, isError, refetch, create, revoke } = useTokens();
   const [name, setName] = useState('');
   // Revoking a token breaks any integration using it → impact-radiography confirm.
@@ -716,7 +719,7 @@ function GeneralTab({ tr }: { tr: Tr }) {
     .slice(0, 2)
     .join('')
     .toUpperCase();
-  const created = new Date(org.created_at).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', {
+  const created = new Date(org.created_at).toLocaleDateString(localeTag(lang), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -902,6 +905,7 @@ function CountTile({ label, value, color }: { label: string; value: number; colo
  * UI can say "configured" without ever handling a webhook URL.
  */
 function IntegrationsTab({ tr }: { tr: Tr }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const channels = useChannelConfig();
   const scanners = useVulnIntegrations();
@@ -1053,10 +1057,7 @@ function IntegrationsTab({ tr }: { tr: Tr }) {
               {scanners.isError
                 ? tr('État indisponible.', 'State unavailable.')
                 : scannersConfigured > 0
-                  ? tr(
-                      `${scannersConfigured} source${scannersConfigured > 1 ? 's' : ''} configurée${scannersConfigured > 1 ? 's' : ''} (Nessus, Qualys, Defender…).`,
-                      `${scannersConfigured} source${scannersConfigured > 1 ? 's' : ''} configured (Nessus, Qualys, Defender…).`,
-                    )
+                  ? `${t('common.sources', { count: scannersConfigured })} (Nessus, Qualys, Defender…).`
                   : tr(
                       'Aucune source connectée. Connectez un scanner pour ingérer des vulnérabilités.',
                       'No source connected. Connect a scanner to start ingesting vulnerabilities.',

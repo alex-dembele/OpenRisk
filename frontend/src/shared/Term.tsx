@@ -8,10 +8,11 @@
 import type { ReactNode } from 'react';
 import { GLOSSARY } from './glossary';
 import { useUIStore } from '../store/uiStore';
+import { pickLocalized } from '../i18n/locales';
 
 export function Term({ term, children }: { term: string; children?: ReactNode }) {
   const lang = useUIStore((s) => s.lang);
-  const def = GLOSSARY[term]?.[lang];
+  const def = pickLocalized(lang, GLOSSARY[term]);
   const content = children ?? term;
   if (!def) return <>{content}</>;
   return (

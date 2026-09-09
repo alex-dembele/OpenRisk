@@ -15,6 +15,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { HelpCircle, ExternalLink } from 'lucide-react';
+import type { LocaleCode } from '../i18n/locales';
 
 export type HelpField = 'probability' | 'impact' | 'asset_criticality';
 
@@ -224,7 +225,7 @@ export function FieldHelp({
   className = '',
 }: {
   field: HelpField;
-  lang?: 'fr' | 'en';
+  lang?: LocaleCode;
   /** The tenant's sector, so the example is one they recognise. */
   sector?: string;
   className?: string;

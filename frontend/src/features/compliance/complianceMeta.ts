@@ -8,7 +8,9 @@
 // "En cours" beside a detail showing "In progress" is the kind of drift nobody
 // notices until a screenshot goes to a regulator.
 
+import { localeTag } from '../../i18n/locales';
 import type { AuditStatus, RemediationPriority, RemediationStatus } from '../../types/compliance';
+import type { LocaleCode } from '../../i18n/locales';
 
 export interface Meta {
   color: string;
@@ -59,11 +61,11 @@ export const REMEDIATION_STATUS_ORDER: RemediationStatus[] = [
 ];
 
 /** Formats an ISO date for display, or an em dash when absent. */
-export function formatDate(iso: string | null | undefined, lang: 'fr' | 'en'): string {
+export function formatDate(iso: string | null | undefined, lang: LocaleCode): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+  return d.toLocaleDateString(localeTag(lang), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

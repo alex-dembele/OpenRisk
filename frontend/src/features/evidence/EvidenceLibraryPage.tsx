@@ -41,6 +41,7 @@ import { EvidenceDrawer } from './EvidenceDrawer';
 import { CreateEvidenceModal } from './CreateEvidenceModal';
 import { evidenceService } from '../../services/evidenceService';
 import type { Evidence, EvidenceStatus, EvidenceType } from '../../types/evidence';
+import { localeTag } from '../../i18n/locales';
 
 const TYPE_ICON: Record<EvidenceType, typeof FileText> = {
   document: FileText,
@@ -262,7 +263,7 @@ export function EvidenceLibraryPage() {
                       </td>
                       <td className="px-4 py-3 text-ink-muted whitespace-nowrap">
                         {new Date(e.collected_at).toLocaleDateString(
-                          lang === 'fr' ? 'fr-FR' : 'en-GB',
+                          localeTag(lang),
                         )}
                       </td>
                       <td className="px-4 py-3">

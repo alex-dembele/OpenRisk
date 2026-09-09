@@ -31,9 +31,10 @@ import { AlertTriangle, CalendarX, Lock, type LucideIcon } from 'lucide-react';
 import { EmptyState } from '../../shared/EmptyState';
 import { Btn, Skeleton } from '../../shared/ui';
 import { isPermissionError } from './widgetError';
+import type { LocaleCode } from '../../i18n/locales';
 
 export interface WidgetStateProps {
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
   isLoading: boolean;
   error: unknown;
   /** True when the fetch succeeded and returned nothing to draw. */

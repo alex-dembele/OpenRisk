@@ -21,6 +21,7 @@ import { useMFAStatus } from './useMfa';
 import { daysUntilDeadline, type MFAStatus } from './mfaPolicyService';
 import { MFAEnrollmentDialog } from './MFAEnrollmentDialog';
 import { useUIStore } from '../../store/uiStore';
+import { catalogs, translate, DEFAULT_LOCALE, type LocaleCode } from '../../i18n';
 
 /**
  * Session-scoped dismissal for the soft prompt.
@@ -49,8 +50,16 @@ interface Copy {
  * implementations of "are they required?" is how the banner and the guard end
  * up disagreeing, and the one the user believes is the wrong one.
  */
-export function copyFor(status: MFAStatus, tr: (fr: string, en: string) => string): Copy | null {
+export function copyFor(
+  status: MFAStatus,
+  tr: (fr: string, en: string) => string,
+  /** Locale for the day count's plural form. Optional so existing callers hold. */
+  locale: LocaleCode = DEFAULT_LOCALE,
+): Copy | null {
   const days = daysUntilDeadline(status);
+  // "1 jour" / "2 jours" / "0 days" — the plural rule belongs to the language,
+  // not to a `days > 1` written into a French sentence.
+  const dayCount = (n: number) => translate(catalogs, locale, 'common.days', { params: { count: n } });
 
   switch (status.state) {
     case 'configured':
@@ -80,8 +89,8 @@ export function copyFor(status: MFAStatus, tr: (fr: string, en: string) => strin
                 'Your role grants access to sensitive data and settings, so two-factor authentication is required.',
               )
             : tr(
-                `Votre rôle donne accès à des données sensibles. Il vous reste ${days} jour${days > 1 ? 's' : ''} pour activer le MFA.`,
-                `Your role grants access to sensitive data. You have ${days} day${days === 1 ? '' : 's'} left to enable MFA.`,
+                `Votre rôle donne accès à des données sensibles. Il vous reste ${dayCount(days)} pour activer le MFA.`,
+                `Your role grants access to sensitive data. You have ${dayCount(days)} left to enable MFA.`,
               ),
         cta: tr('Activer le MFA', 'Enable MFA'),
       };
@@ -98,8 +107,8 @@ export function copyFor(status: MFAStatus, tr: (fr: string, en: string) => strin
                 'Access to OpenRisk will be blocked shortly until MFA is enabled.',
               )
             : tr(
-                `Il vous reste ${days} jour${days > 1 ? 's' : ''}. Passé ce délai, l'accès sera bloqué jusqu'à l'activation du MFA.`,
-                `You have ${days} day${days === 1 ? '' : 's'} left. After that, access is blocked until MFA is enabled.`,
+                `Il vous reste ${dayCount(days)}. Passé ce délai, l'accès sera bloqué jusqu'à l'activation du MFA.`,
+                `You have ${dayCount(days)} left. After that, access is blocked until MFA is enabled.`,
               ),
         cta: tr('Activer le MFA', 'Enable MFA'),
       };
@@ -180,7 +189,7 @@ export function MFAEnrollmentBanner() {
 
   if (!status) return null;
 
-  const copy = copyFor(status, tr);
+  const copy = copyFor(status, tr, lang);
   if (!copy) return null;
   if (copy.dismissible && dismissed) return null;
 

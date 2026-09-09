@@ -39,6 +39,9 @@ import {
 } from '../../features/notifications/useNotifications';
 import { EmptyState } from '../../shared/EmptyState';
 import { Btn, SkeletonRows } from '../../shared/ui';
+import type { LocaleCode } from '../../i18n/locales';
+import { pickLocalized } from '../../i18n/locales';
+import { ENABLED_LOCALES, localeDefinition } from '../../i18n/locales';
 
 interface AppHeaderProps {
   onOpenMobileNav: () => void;
@@ -56,6 +59,15 @@ export const AppHeader = ({ onOpenMobileNav }: AppHeaderProps) => {
   const theme = useUIStore((s) => s.theme);
   const lang = useUIStore((s) => s.lang);
   const L = useUIStrings();
+  // The switcher names the language it will switch *to*, in that language's own
+  // words, and reads the list from the registry — so enabling a third locale
+  // needs no edit here.
+  const nextLocaleLabel = (() => {
+    const offered = ENABLED_LOCALES;
+    const next = offered[(offered.indexOf(lang) + 1) % offered.length];
+    return `${localeDefinition(next).nativeName} — ${localeDefinition(lang).nativeName}`;
+  })();
+
   const densityMeta = {
     comfort: { Icon: Rows3, label: lang === 'fr' ? 'Densité : Confort' : 'Density: Comfort' },
     compact: { Icon: Rows4, label: lang === 'fr' ? 'Densité : Compact' : 'Density: Compact' },
@@ -115,8 +127,8 @@ export const AppHeader = ({ onOpenMobileNav }: AppHeaderProps) => {
         <button
           onClick={toggleLang}
           className={iconBtn}
-          title="Language"
-          aria-label="Toggle language"
+          title={nextLocaleLabel}
+          aria-label={nextLocaleLabel}
         >
           <span className="mono text-[11px] font-semibold">{lang.toUpperCase()}</span>
         </button>
@@ -254,7 +266,7 @@ function NotifPanel({ onClose }: { onClose: () => void }) {
           <div className="flex gap-1.5 px-[15px] py-2.5 border-b border-border overflow-x-auto">
             {cats.map((c) => {
               const active = filter === c;
-              const label = c === 'all' ? tr('Tout', 'All') : categoryMeta(c).label[lang];
+              const label = c === 'all' ? tr('Tout', 'All') : pickLocalized(lang, categoryMeta(c).label);
               return (
                 <button
                   key={c}
@@ -346,7 +358,7 @@ function NotifPanel({ onClose }: { onClose: () => void }) {
                           background: `color-mix(in srgb, ${categoryMeta(it.category).color} 14%, transparent)`,
                         }}
                       >
-                        {categoryMeta(it.category).label[lang]}
+                        {pickLocalized(lang, categoryMeta(it.category).label)}
                       </span>
                     </div>
                   </div>
@@ -379,7 +391,7 @@ function NotifPanel({ onClose }: { onClose: () => void }) {
 // the dot reports whether live updates are actually arriving — which is the
 // difference between a screen that refreshes itself and one the user has to
 // reload, and the user is entitled to know which they are looking at.
-function ConnectionDot({ lang }: { lang: 'fr' | 'en' }) {
+function ConnectionDot({ lang }: { lang: LocaleCode }) {
   const status = useSyncExternalStore(
     subscribeConnection,
     getConnectionStatus,
@@ -486,7 +498,7 @@ function ConnectionDot({ lang }: { lang: 'fr' | 'en' }) {
 }
 
 /** Compact relative time ("il y a 8 min"), no dependency on a date library. */
-function relativeTime(iso: string, lang: 'fr' | 'en'): string {
+function relativeTime(iso: string, lang: LocaleCode): string {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return '';
   const mins = Math.max(0, Math.floor((Date.now() - then) / 60000));

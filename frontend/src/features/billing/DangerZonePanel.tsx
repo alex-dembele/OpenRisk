@@ -6,6 +6,7 @@
 // code (for enrolled admins), and shows the 30-day cancelable grace window with a
 // running countdown. Nothing is destroyed synchronously.
 
+import { useFormat } from '../../hooks/useI18n';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, Download } from 'lucide-react';
@@ -14,6 +15,7 @@ import { orgDeletionService } from '../../services/entitlementService';
 import { useOrgDeletion, useRequestOrgDeletion, useCancelOrgDeletion } from './useEntitlements';
 
 export function DangerZonePanel() {
+  const fmt = useFormat();
   const user = useAuthStore((s) => s.user);
   const orgName = user?.org_name ?? '';
   const { data: state } = useOrgDeletion();
@@ -74,7 +76,7 @@ export function DangerZonePanel() {
           L'organisation <strong>{orgName}</strong> sera définitivement supprimée le{' '}
           <strong>
             {state.scheduled_purge_at
-              ? new Date(state.scheduled_purge_at).toLocaleDateString('fr-FR')
+              ? fmt.date(state.scheduled_purge_at)
               : ''}
           </strong>
           .

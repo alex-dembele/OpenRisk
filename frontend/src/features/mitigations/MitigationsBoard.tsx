@@ -6,6 +6,7 @@
 // Table, and a Gantt timeline positioned by real start/due dates. Loading skeleton
 // + empty state on all three.
 
+import { localeTag } from '../../i18n/locales';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
@@ -560,7 +561,7 @@ function GanttView({
       const t = min + (range * k) / 4;
       ticks.push({
         pct: (k / 4) * 100,
-        label: new Date(t).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+        label: new Date(t).toLocaleDateString(localeTag(lang), {
           day: '2-digit',
           month: 'short',
         }),

@@ -5,11 +5,13 @@
 // drawer render. Normalizes the two live status vocabularies (DRAFT/ACTIVE/… and
 // open/in_progress/…) and the criticality/level fields into the design's tokens.
 
+import { localeTag } from '../../i18n/locales';
 import type { Risk, RiskPhase } from '../../hooks/useRiskStore';
 import type { RiskControlMapping } from '../../services/taxonomyService';
 import { mappingHref, mappingLabel } from '../../services/taxonomyService';
 import type { Criticality } from '../../shared/riskColors';
 import type { RiskStatus } from '../../shared/ui';
+import type { LocaleCode } from '../../i18n/locales';
 
 export interface UiRisk {
   id: string;
@@ -67,7 +69,7 @@ export function initialsOf(name?: string, fallback = '—'): string {
 }
 
 /** Compact locale-aware relative time without pulling a heavy dep. */
-export function relTime(iso?: string, lang: 'fr' | 'en' = 'fr'): string {
+export function relTime(iso?: string, lang: LocaleCode = 'fr'): string {
   if (!iso) return '—';
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '—';
@@ -83,10 +85,10 @@ export function relTime(iso?: string, lang: 'fr' | 'en' = 'fr'): string {
   if (d < 7) return fr ? `il y a ${d} j` : `${d} d ago`;
   const w = Math.floor(d / 7);
   if (w < 5) return fr ? `il y a ${w} sem.` : `${w} w ago`;
-  return new Date(iso).toLocaleDateString(fr ? 'fr-FR' : 'en-US');
+  return new Date(iso).toLocaleDateString(localeTag(lang));
 }
 
-export function mapRisk(r: Risk, lang: 'fr' | 'en'): UiRisk {
+export function mapRisk(r: Risk, lang: LocaleCode): UiRisk {
   const rr = r as Risk & { name?: string; owner?: string; asset_id?: string; updated_at?: string };
   // The owner is now a real user id resolved server-side; the legacy free-text
   // fields are only a fallback for rows written before migration 0044.

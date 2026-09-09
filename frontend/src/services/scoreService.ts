@@ -15,6 +15,8 @@
 // durable fix is that the client never derives a label at all.
 
 import { api } from '../lib/api';
+import type { LocaleCode } from '../i18n/locales';
+import { pickLocalized } from '../i18n/locales';
 
 export type ScoreScope = 'tenant' | 'risk' | 'asset';
 
@@ -148,7 +150,7 @@ export function bandTextColor(band: ScoreBand | undefined): string {
 }
 
 /** FR/EN label for a band, keyed by the server's i18n key. */
-export function bandLabel(band: ScoreBand | undefined, lang: 'fr' | 'en'): string {
+export function bandLabel(band: ScoreBand | undefined, lang: LocaleCode): string {
   const labels: Record<ScoreBand, { fr: string; en: string }> = {
     low: { fr: 'Faible', en: 'Low' },
     medium: { fr: 'Moyen', en: 'Medium' },
@@ -156,11 +158,11 @@ export function bandLabel(band: ScoreBand | undefined, lang: 'fr' | 'en'): strin
     critical: { fr: 'Critique', en: 'Critical' },
   };
   if (!band || !(band in labels)) return lang === 'fr' ? 'Non mesuré' : 'Not measured';
-  return labels[band][lang];
+  return pickLocalized(lang, labels[band]) ?? band;
 }
 
 /** FR/EN label for a factor, keyed by the server's factor key. */
-export function factorLabel(factor: string, lang: 'fr' | 'en'): string {
+export function factorLabel(factor: string, lang: LocaleCode): string {
   const labels: Record<string, { fr: string; en: string }> = {
     risk_exposure: { fr: 'Exposition aux risques', en: 'Risk exposure' },
     control_gaps: { fr: 'Écarts de conformité', en: 'Control gaps' },
@@ -173,5 +175,5 @@ export function factorLabel(factor: string, lang: 'fr' | 'en'): string {
     linked_risk_exposure: { fr: 'Risques liés', en: 'Linked risks' },
     internet_exposure: { fr: 'Exposition Internet', en: 'Internet exposure' },
   };
-  return labels[factor]?.[lang] ?? factor;
+  return pickLocalized(lang, labels[factor]) ?? factor;
 }
