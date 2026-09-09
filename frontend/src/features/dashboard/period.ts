@@ -20,6 +20,8 @@
 
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
+import type { LocaleCode } from '../../i18n/locales';
+import { pickLocalized } from '../../i18n/locales';
 
 /** The presets the server accepts. Anything else is a 400, by design. */
 export const PERIOD_PRESETS = ['all', '7d', '30d', '90d'] as const;
@@ -108,7 +110,7 @@ export function periodToSearchParams(
 }
 
 /** Human label, FR/EN. Kept beside the values so a new preset cannot ship unlabelled. */
-export function periodLabel(sel: PeriodSelection, lang: 'fr' | 'en'): string {
+export function periodLabel(sel: PeriodSelection, lang: LocaleCode): string {
   if (sel.kind === 'custom') return `${sel.from} → ${sel.to}`;
   const labels: Record<PeriodPreset, { fr: string; en: string }> = {
     all: { fr: 'Tout', en: 'All time' },
@@ -116,7 +118,7 @@ export function periodLabel(sel: PeriodSelection, lang: 'fr' | 'en'): string {
     '30d': { fr: '30 jours', en: '30 days' },
     '90d': { fr: '90 jours', en: '90 days' },
   };
-  return labels[sel.preset][lang];
+  return pickLocalized(lang, labels[sel.preset]) ?? sel.preset;
 }
 
 /**

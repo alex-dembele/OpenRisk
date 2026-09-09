@@ -27,6 +27,7 @@ import { ScoreExplainerButton } from '../../shared/ScoreExplainer';
 import { useUIStore } from '../../store/uiStore';
 import { useInvalidateActivation, useOnboardingSuggestions } from '../onboarding/useActivation';
 import type { RiskSuggestion } from '../../services/activationService';
+import type { LocaleCode } from '../../i18n/locales';
 
 const createRiskSchema = z.object({
   title: z.string().min(5, 'Le nom doit comporter au moins 5 caractères').max(100),
@@ -509,7 +510,7 @@ function SuggestionPicker({
 }: {
   suggestions: RiskSuggestion[];
   visible: boolean;
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
   onPick: (s: RiskSuggestion) => void;
 }) {
   if (!visible || suggestions.length === 0) return null;

@@ -8,6 +8,7 @@
 // to Compliance: a closed loop that never produced a document. The request now
 // terminates here, on the artifact, with a download and a way back.
 
+import { localeTag } from '../../i18n/locales';
 import { useParams, Link } from 'react-router';
 import { Download, RefreshCw, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,8 +17,9 @@ import { Btn, Card } from '../../shared/ui';
 import { useUIStore } from '../../store/uiStore';
 import { useReportJob } from './useReportJobs';
 import { reportJobService } from './reportJobService';
+import type { LocaleCode } from '../../i18n/locales';
 
-function formatBytes(n: number | undefined, lang: 'fr' | 'en'): string {
+function formatBytes(n: number | undefined, lang: LocaleCode): string {
   if (!n) return '—';
   const kb = n / 1024;
   if (kb < 1024) return `${kb.toFixed(0)} ${lang === 'fr' ? 'Ko' : 'KB'}`;
@@ -53,7 +55,7 @@ export function ReportJobPage() {
       subtitle={
         job ? (
           <span className="text-ink-muted">
-            {new Date(job.created_at).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}
+            {new Date(job.created_at).toLocaleString(localeTag(lang))}
           </span>
         ) : null
       }
@@ -135,7 +137,7 @@ export function ReportJobPage() {
             </DetailField>
             <DetailField label={tr('Généré le', 'Generated at')}>
               {job.completed_at
-                ? new Date(job.completed_at).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')
+                ? new Date(job.completed_at).toLocaleString(localeTag(lang))
                 : '—'}
             </DetailField>
           </Card>

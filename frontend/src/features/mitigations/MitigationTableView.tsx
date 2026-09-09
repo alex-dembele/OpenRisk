@@ -3,6 +3,7 @@
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Affero General Public License v3.0 (see LICENSE).
 
+import { useFormat } from '../../hooks/useI18n';
 import { useState, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
@@ -25,6 +26,7 @@ export const MitigationTableView = memo(function MitigationTableView({
   isLoading = false,
   onRowClick,
 }: MitigationTableViewProps) {
+  const fmt = useFormat();
   const [sortField, setSortField] = useState<SortField>('due_date');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -172,7 +174,7 @@ export const MitigationTableView = memo(function MitigationTableView({
               </td>
               <td className="px-4 py-3 text-fg-secondary">{mitigation.progress_percentage}%</td>
               <td className="px-4 py-3 text-fg-secondary">
-                {new Date(mitigation.due_date).toLocaleDateString('fr-FR')}
+                {fmt.date(mitigation.due_date)}
               </td>
               <td className="px-4 py-3">
                 {mitigation.assigned_to_user ? (

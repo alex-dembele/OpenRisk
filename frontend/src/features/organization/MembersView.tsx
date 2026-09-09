@@ -12,6 +12,7 @@
 // functional that is not: an action the API would refuse is disabled here for
 // the same reason, read from the same fields.
 
+import { localeTag } from '../../i18n/locales';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -39,6 +40,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../hooks/useAuthStore';
 import { useEscapeToClose } from '../../shared/useBackTo';
 import { useRbacCatalog } from '../rbac/useRbac';
+import type { LocaleCode } from '../../i18n/locales';
 import {
   useMembers,
   useInvitations,
@@ -78,11 +80,11 @@ const INVITE_STATUS_STYLE: Record<string, { color: string; fr: string; en: strin
 
 const ADMIN_OPTION = '__admin__';
 
-function fmtDate(iso: string | undefined, lang: 'fr' | 'en'): string {
+function fmtDate(iso: string | undefined, lang: LocaleCode): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', {
+  return d.toLocaleDateString(localeTag(lang), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -240,7 +242,7 @@ export function MembersView() {
 
 /* ------------------------------------------------------------------- members */
 
-function MembersTable({ tr, lang }: { tr: Tr; lang: 'fr' | 'en' }) {
+function MembersTable({ tr, lang }: { tr: Tr; lang: LocaleCode }) {
   const { can } = usePermissions();
   const canUpdate = can('organization:members:update');
   const canDeactivate = can('organization:members:deactivate');
@@ -610,7 +612,7 @@ function MembersTable({ tr, lang }: { tr: Tr; lang: 'fr' | 'en' }) {
 
 /* --------------------------------------------------------------- invitations */
 
-function InvitationsTable({ tr, lang }: { tr: Tr; lang: 'fr' | 'en' }) {
+function InvitationsTable({ tr, lang }: { tr: Tr; lang: LocaleCode }) {
   const { can } = usePermissions();
   const canInvite = can('organization:members:invite');
   const { data, isLoading, isError, refetch } = useInvitations();
@@ -828,7 +830,7 @@ function InvitationsTable({ tr, lang }: { tr: Tr; lang: 'fr' | 'en' }) {
 
 /* ------------------------------------------------------------------- history */
 
-function AccessHistory({ tr, lang }: { tr: Tr; lang: 'fr' | 'en' }) {
+function AccessHistory({ tr, lang }: { tr: Tr; lang: LocaleCode }) {
   const { data, isLoading, isError, refetch } = useMembershipAudit(100);
 
   if (isLoading) return <SkeletonRows rows={6} />;
@@ -886,7 +888,7 @@ function AccessHistory({ tr, lang }: { tr: Tr; lang: 'fr' | 'en' }) {
                     attributing it to somebody would not be. */}
                 {e.actor_email || (e.actor_id ? e.actor_id.slice(0, 8) : tr('Système', 'System'))}
                 {' · '}
-                {new Date(e.at).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-GB')}
+                {new Date(e.at).toLocaleString(localeTag(lang))}
                 {e.ip_address ? ` · ${e.ip_address}` : ''}
               </div>
             </div>

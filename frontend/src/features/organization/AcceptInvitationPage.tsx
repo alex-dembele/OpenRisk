@@ -12,6 +12,7 @@
 // each get their own words. "Invalid token" tells someone holding a legitimate
 // link nothing they can act on.
 
+import { localeTag } from '../../i18n/locales';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -373,7 +374,7 @@ export function AcceptInvitationPage() {
               <p className="text-[11.5px] text-ink-muted mt-4 text-center leading-snug">
                 {tr('Ce lien expire le ', 'This link expires on ')}
                 {new Date(preview.expires_at).toLocaleDateString(
-                  lang === 'fr' ? 'fr-FR' : 'en-GB',
+                  localeTag(lang),
                   {
                     day: 'numeric',
                     month: 'long',

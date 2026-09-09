@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { useUIStore } from '../../store/uiStore';
+import { pickLocalized } from '../../i18n/locales';
 import {
   NOTIF_CATEGORIES,
   loadNotifPrefs,
@@ -93,21 +94,21 @@ export function NotificationCategoryPrefs() {
               <Icon size={16} strokeWidth={1.8} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[13.5px] font-medium text-ink">{c.label[lang]}</div>
-              <div className="text-[11.5px] text-ink-muted leading-snug">{c.desc[lang]}</div>
+              <div className="text-[13.5px] font-medium text-ink">{pickLocalized(lang, c.label)}</div>
+              <div className="text-[11.5px] text-ink-muted leading-snug">{pickLocalized(lang, c.desc)}</div>
             </div>
             <div className="w-[52px] flex justify-center">
               <Switch
                 on={p.inApp}
                 onClick={() => toggle(c.key, 'inApp')}
-                label={`${c.label[lang]} in-app`}
+                label={`${pickLocalized(lang, c.label) ?? ''} in-app`}
               />
             </div>
             <div className="w-[52px] flex justify-center">
               <Switch
                 on={p.email}
                 onClick={() => toggle(c.key, 'email')}
-                label={`${c.label[lang]} email`}
+                label={`${pickLocalized(lang, c.label) ?? ''} email`}
               />
             </div>
           </div>

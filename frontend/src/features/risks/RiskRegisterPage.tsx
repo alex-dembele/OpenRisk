@@ -12,6 +12,8 @@
 // view. The right-side drawer (Details / Lifecycle / Score / Financial / …)
 // is unchanged.
 
+import { useFormat } from '../../hooks/useI18n';
+import { localeTag } from '../../i18n/locales';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -77,6 +79,7 @@ import { useUIStore } from '../../store/uiStore';
 import { useRiskStore, type RiskPhase } from '../../hooks/useRiskStore';
 import { useFocusParam } from '../../shared/useFocusParam';
 import { useAuthStore } from '../../hooks/useAuthStore';
+import { isMissingRows } from '../../services/bulkService';
 import { mapRisk, relTime, type UiRisk } from './riskMap';
 import { EditRiskModal } from './components/EditRiskModal';
 import { CreateMitigationModal } from '../mitigations/CreateMitigationModal';
@@ -97,6 +100,7 @@ import { ownershipPatch, type OwnershipRole } from '../../services/ownershipServ
 import { mappingHref, mappingLabel } from '../../services/taxonomyService';
 import { ctiService } from '../cti/ctiService';
 import { useQueryClient } from '@tanstack/react-query';
+import type { LocaleCode } from '../../i18n/locales';
 
 /* -------------------------------------------------------------- CSV export */
 
@@ -145,6 +149,7 @@ export function RiskRegisterPage() {
   const loadError = useRiskStore((s) => s.error);
   const fetchRisks = useRiskStore((s) => s.fetchRisks);
   const deleteRisk = useRiskStore((s) => s.deleteRisk);
+  const bulkDelete = useRiskStore((s) => s.bulkDelete);
   const canUpdate = useAuthStore((s) => s.hasPermission('risks:update'));
   const { data: categories } = useRiskCategories();
   const canDelete = useAuthStore((s) => s.hasPermission('risks:delete'));
@@ -494,16 +499,38 @@ export function RiskRegisterPage() {
         icon: Trash2,
         danger: true,
         hidden: !canDelete,
-        // Per-id API: refuse to pretend we can delete "all N results" in one go.
+        // The governed endpoint takes explicit ids and caps a batch at 100, so it
+        // cannot address "all N results" — the largest page is exactly 100. This
+        // is a property of the API, not a UI limitation we could lift here.
         selectionOnly: true,
+        // ONE request (#598). `POST /risks/bulk` is transactional and audited:
+        // every named risk is deleted or none is, and each deletion is recorded
+        // against the actor. The bar shows its own error state on rejection; the
+        // toast is what says *why*, because under all-or-nothing the fact that
+        // nothing was deleted is the part the user has to know.
         run: async ({ ids }) => {
-          await Promise.all(ids.map((id) => deleteRisk(id)));
+          try {
+            await bulkDelete(ids);
+          } catch (err) {
+            toast.error(
+              isMissingRows(err)
+                ? tr(
+                    'Aucun risque supprimé : la sélection a changé. Rechargez et réessayez.',
+                    'No risk deleted: the selection has changed. Reload and try again.',
+                  )
+                : tr(
+                    `Aucun risque supprimé (${ids.length} sélectionné(s)).`,
+                    `No risk deleted (${ids.length} selected).`,
+                  ),
+            );
+            throw err;
+          }
           toast.success(tr(`${ids.length} risque(s) supprimé(s)`, `${ids.length} risk(s) deleted`));
           reload();
         },
       },
     ],
-    [L, canDelete, deleteRisk, reload],
+    [L, canDelete, bulkDelete, reload],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   const critCount = ui.filter((r) => r.crit === 'critical').length;
@@ -1083,7 +1110,7 @@ function DrawerCTI({ r }: { r: UiRisk }) {
       {data.cisa_known && data.cisa_due_date && (
         <Fact
           label={tr('Échéance CISA', 'CISA due date')}
-          value={new Date(data.cisa_due_date).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB')}
+          value={new Date(data.cisa_due_date).toLocaleDateString(localeTag(lang))}
         />
       )}
       {!!data.mitre_tactics?.length && (
@@ -1710,7 +1737,7 @@ function DrawerSmart({ r }: { r: UiRisk }) {
 // renders GET /risks/:id/transitions verbatim, blockers included.
 
 /** State pill for the register row, from the single canonical lifecycle. */
-function PhasePill({ phase, lang }: { phase: RiskPhase; lang: 'fr' | 'en' }) {
+function PhasePill({ phase, lang }: { phase: RiskPhase; lang: LocaleCode }) {
   const closed = phase === 'closed';
   const col = closed ? 'var(--fg-secondary)' : 'var(--accent)';
   const labels: Record<RiskPhase, [string, string]> = {
@@ -1776,11 +1803,14 @@ function DrawerFinancial({ r }: { r: UiRisk }) {
     raw.mitigation_effectiveness != null ? Number(raw.mitigation_effectiveness) : 0,
   );
   const [busy, setBusy] = useState(false);
+  const fmt = useFormat();
 
+  // Money goes through `Intl` in the reader's locale: XAF prints "FCFA" with no
+  // minor unit and USD prints "$" with cents suppressed, in both languages.
   const fmtXAF = (v?: number) =>
-    v == null ? '—' : `${Math.round(v).toLocaleString('fr-FR')} FCFA`;
+    v == null ? '—' : fmt.currency(Math.round(v), { currency: 'XAF' });
   const fmtUSD = (v?: number) =>
-    v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    v == null ? '—' : fmt.currency(v, { currency: 'USD', fractionDigits: 0 });
   const fmtPct = (ratio: number) => `${ratio >= 0 ? '+' : ''}${Math.round(ratio * 100)}%`;
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
 

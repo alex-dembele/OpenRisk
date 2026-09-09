@@ -6,6 +6,7 @@
 // card shell and the persona header. Keeps the personas thin — each just wires its
 // own real data into these.
 
+import { localeTag, type LocaleCode } from '../../i18n/locales';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FileText, type LucideIcon } from 'lucide-react';
 import { InfoHint } from '../../shared/InfoHint';
@@ -64,8 +65,8 @@ export const Card = ({
 );
 
 /** Locale number formatter shared by every persona. */
-export const numFmt = (lang: string) => (n: number) =>
-  Math.round(n).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US');
+export const numFmt = (lang: LocaleCode) => (n: number) =>
+  Math.round(n).toLocaleString(localeTag(lang));
 
 /* ---------------- persona header ---------------- */
 

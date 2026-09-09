@@ -6,6 +6,8 @@
 // cancellation, invoices — plus the opt-in telemetry consent. Reads the real
 // entitlements/billing endpoints; the backend enforces every gate.
 
+import { type BoundFormatters } from '../../i18n';
+import { useFormat } from '../../hooks/useI18n';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Sparkles } from 'lucide-react';
@@ -58,12 +60,12 @@ const PLAN_HIGHLIGHTS: Record<PlanKey, string[]> = {
   ],
 };
 
-function formatPrice(p: Price | undefined): string {
+function formatPrice(p: Price | undefined, fmt: BoundFormatters): string {
   if (!p) return '—';
   if (p.custom) return 'Sur devis';
   if (p.amount === 0) return 'Gratuit';
   if (p.currency === 'EUR') return `${p.amount} € / mois`;
-  return `${p.amount.toLocaleString('fr-FR')} ${p.currency} / mois`;
+  return `${fmt.currency(p.amount, { currency: p.currency })} / mois`;
 }
 
 const LIMIT_LABEL: Record<string, string> = {
@@ -74,6 +76,7 @@ const LIMIT_LABEL: Record<string, string> = {
 };
 
 export function BillingPanel() {
+  const fmt = useFormat();
   const { data: ent, isLoading } = useEntitlements();
   const { data: billing } = useBilling();
   const startTrial = useStartTrial();
@@ -248,7 +251,7 @@ export function BillingPanel() {
                 {plan === 'pro' && <Sparkles size={14} className="text-accent" />}
               </div>
               <div className="text-[12px] text-ink-soft mb-2">{PLAN_PITCH[plan]}</div>
-              <div className="disp text-[20px] font-bold text-ink mb-3">{formatPrice(price)}</div>
+              <div className="disp text-[20px] font-bold text-ink mb-3">{formatPrice(price, fmt)}</div>
               <ul className="space-y-1.5 mb-4 flex-1">
                 {PLAN_HIGHLIGHTS[plan].map((h) => (
                   <li key={h} className="flex items-start gap-1.5 text-[12.5px] text-ink-soft">
@@ -293,11 +296,11 @@ export function BillingPanel() {
               <div key={inv.id} className="flex items-center justify-between text-[12.5px]">
                 <span className="text-ink-soft">
                   {inv.number || inv.id.slice(0, 8)} ·{' '}
-                  {new Date(inv.created_at).toLocaleDateString('fr-FR')}
+                  {fmt.date(inv.created_at)}
                 </span>
                 <span className="flex items-center gap-3">
                   <span className="font-semibold text-ink">
-                    {(inv.amount_cents / 100).toLocaleString('fr-FR')} {inv.currency}
+                    {fmt.currency(inv.amount_cents / 100, { currency: inv.currency })}
                   </span>
                   {inv.hosted_url && (
                     <a

@@ -8,6 +8,7 @@
 
 import { useEffect } from 'react';
 import { Keyboard, X } from 'lucide-react';
+import type { LocaleCode } from '../i18n/locales';
 
 interface Row {
   keys: string[];
@@ -48,7 +49,7 @@ export function ShortcutsOverlay({
 }: {
   open: boolean;
   onClose: () => void;
-  lang: 'fr' | 'en';
+  lang: LocaleCode;
 }) {
   useEffect(() => {
     if (!open) return;

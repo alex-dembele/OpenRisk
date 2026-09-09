@@ -1,3 +1,4 @@
+import type { LocaleCode } from '../../i18n/locales';
 // Copyright (c) 2026 OpenDefender Contributors
 // SPDX-License-Identifier: LicenseRef-OpenRisk-Commercial
 //
@@ -297,7 +298,7 @@ export function criticalityFromFactor(f: number): AssetCriticality {
   return 'LOW';
 }
 
-export function scheduleLabel(minutes: number, lang: 'fr' | 'en'): string {
+export function scheduleLabel(minutes: number, lang: LocaleCode): string {
   switch (minutes) {
     case 60:
       return lang === 'fr' ? 'Horaire' : 'Hourly';
@@ -312,7 +313,7 @@ export function scheduleLabel(minutes: number, lang: 'fr' | 'en'): string {
   }
 }
 
-export function timeAgo(iso: string | null | undefined, lang: 'fr' | 'en'): string {
+export function timeAgo(iso: string | null | undefined, lang: LocaleCode): string {
   if (!iso) return '—';
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '—';

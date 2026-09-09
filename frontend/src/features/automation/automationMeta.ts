@@ -1,3 +1,4 @@
+import type { LocaleCode } from '../../i18n/locales';
 // Copyright (c) 2026 OpenDefender Contributors
 // SPDX-License-Identifier: LicenseRef-OpenRisk-Commercial
 //
@@ -28,7 +29,7 @@ import type {
   SLAStatus,
 } from './automationService';
 
-type Lang = 'fr' | 'en';
+type Lang = LocaleCode;
 export const pick = (m: { fr: string; en: string }, lang: Lang) => (lang === 'fr' ? m.fr : m.en);
 
 export const TRIGGER_META: Record<

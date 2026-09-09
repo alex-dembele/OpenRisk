@@ -61,13 +61,14 @@ import {
 import { IngestModal } from './IngestModal';
 import { IntegrationsPanel } from './IntegrationsPanel';
 import { safeExternalUrl } from '../../shared/safeUrl';
+import type { LocaleCode } from '../../i18n/locales';
 import {
   BulkPreviewDialog,
   useGovernedBulk,
   type BulkChangeInput,
 } from '../../shared/bulk';
 
-const t = (lang: 'fr' | 'en', fr: string, en: string) => (lang === 'fr' ? fr : en);
+const t = (lang: LocaleCode, fr: string, en: string) => (lang === 'fr' ? fr : en);
 
 // CVSS, NOT the OpenRisk score. CVSS is an external 0–10 scale defined by FIRST
 // and its severity cuts (9/7/4) are part of that standard, not ours. Kept local
@@ -516,7 +517,7 @@ export function VulnerabilitiesPage() {
   );
 }
 
-function SevBadge({ sev, lang }: { sev: Vulnerability['severity']; lang: 'fr' | 'en' }) {
+function SevBadge({ sev, lang }: { sev: Vulnerability['severity']; lang: LocaleCode }) {
   const m = SEVERITY_META[sev] ?? SEVERITY_META.info;
   return (
     <span
@@ -587,7 +588,7 @@ function InlineVulnStatus({ v }: { v: Vulnerability }) {
   );
 }
 
-function StatusChip({ status, lang }: { status: VulnStatus; lang: 'fr' | 'en' }) {
+function StatusChip({ status, lang }: { status: VulnStatus; lang: LocaleCode }) {
   const m = STATUS_META[status];
   return (
     <span
