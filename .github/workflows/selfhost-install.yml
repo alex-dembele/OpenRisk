@@ -81,7 +81,7 @@ jobs:
             exit 1
           fi
           sed 's/Password: .*/Password: ***REDACTED***/' install2.log
-          grep -q "already exists" install2.log || {
+          grep -q "Unchanged from your existing install" install2.log || {
             echo "the second run did not report the existing administrator"; exit 1; }
 
       - name: Assert entitlements endpoint is served (open-core is wired)

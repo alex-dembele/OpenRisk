@@ -87,17 +87,17 @@ secret, starts PostgreSQL, Redis, the API and the frontend, waits for health, an
 [openrisk]    • App:  http://localhost:3000
 [openrisk]    • API:  http://localhost:8080/api/v1
 [openrisk] Sign in with:
-[openrisk]    • Email:    admin@openrisk.local
-[openrisk]    • Password: 8xKq2mRt7vNc4Wb9Ld3Yp6Zs1Hf5Gj0A
+[openrisk]    • Email:    admin@opendefender.io
+[openrisk]    • Password: ccsc7TRz2AbdkFwN9BRDAWAVmPagWARV
 ```
 
-No file is edited by hand at any point. The password is shown once and written
-nowhere — save it. Re-running the installer keeps your configuration, your keys
-and that account.
+No file is edited by hand at any point. Re-running the installer keeps your
+configuration, your keys and that account.
 
-A monthly CI job ([`selfhost-install.yml`](.github/workflows/selfhost-install.yml))
-runs this exact flow on a fresh Ubuntu 24.04 VM and signs in with the printed
-credentials, so it is verified rather than asserted.
+A CI job ([`selfhost-install.yml`](.github/workflows/selfhost-install.yml)) runs
+this flow monthly on a fresh Ubuntu 24.04 VM and signs in with the printed
+credentials. It has **not yet had a green run** — the defects that kept it red
+are fixed in #328; the flow was verified by hand on a clean stack on 2026-09-09.
 
 Full guide, including what a self-hosted instance is entitled to, upgrades and
 backups: **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**.
