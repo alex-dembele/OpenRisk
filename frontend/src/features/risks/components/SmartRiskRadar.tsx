@@ -10,6 +10,7 @@
 import { RadarChart } from '../../../shared/ds/charts';
 import type { FactorKey, SmartRiskScore } from '../smartScoreService';
 import { critColor } from '../../../shared/riskColors';
+import type { LocaleCode } from '../../../i18n/locales';
 
 // Bilingual short labels for the radar spokes, keyed by the stable FactorKey.
 const FACTOR_LABELS: Record<FactorKey, [string, string]> = {
@@ -23,7 +24,7 @@ const FACTOR_LABELS: Record<FactorKey, [string, string]> = {
   threat_intel: ['Menaces actives', 'Active threats'],
 };
 
-function factorLabel(key: FactorKey, lang: 'fr' | 'en'): string {
+function factorLabel(key: FactorKey, lang: LocaleCode): string {
   const l = FACTOR_LABELS[key];
   return l ? l[lang === 'fr' ? 0 : 1] : key;
 }
@@ -36,7 +37,7 @@ function smartColor(criticality: SmartRiskScore['criticality']): string {
   return critColor[criticality] ?? 'var(--fg-muted)';
 }
 
-export function SmartRiskRadar({ data, lang }: { data: SmartRiskScore; lang: 'fr' | 'en' }) {
+export function SmartRiskRadar({ data, lang }: { data: SmartRiskScore; lang: LocaleCode }) {
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   // Radar plots each factor's normalised risk contribution (0–100%).
   const radarData = data.factors.map((f) => ({

@@ -42,8 +42,10 @@ import { useFrameworks } from './useCompliance';
 import { useGenerateReport } from '../reports/useReportJobs';
 import { CreateFrameworkDialog, ImportFrameworkDialog } from './ComplianceModals';
 import { ImpactDialog } from '../../shared/ImpactDialog';
+import { useI18n } from '../../hooks/useI18n';
 
 export function ComplianceScreen() {
+  const { t } = useI18n();
   const L = useUIStrings();
   const lang = useUIStore((s) => s.lang);
   const navigate = useNavigate();
@@ -171,8 +173,8 @@ export function ComplianceScreen() {
                 </div>
                 <div className="text-[13.5px] text-ink-soft leading-relaxed mb-3.5 max-w-[520px]">
                   {tr(
-                    `${totalControls} contrôles suivis sur ${fws.length} référentiel${fws.length > 1 ? 's' : ''}. ${gaps} contrôle${gaps > 1 ? 's' : ''} requièrent une action.`,
-                    `${totalControls} controls tracked across ${fws.length} framework${fws.length > 1 ? 's' : ''}. ${gaps} control${gaps > 1 ? 's' : ''} need action.`,
+                    `${totalControls} contrôles suivis sur ${t('common.frameworks', { count: fws.length })}. ${t('common.controls', { count: gaps })} requièrent une action.`,
+                    `${totalControls} controls tracked across ${t('common.frameworks', { count: fws.length })}. ${t('common.controls', { count: gaps })} need action.`,
                   )}
                 </div>
                 <div className="flex gap-2.5 flex-wrap">

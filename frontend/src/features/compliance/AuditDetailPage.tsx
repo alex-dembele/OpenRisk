@@ -25,6 +25,7 @@ import {
 } from './complianceMeta';
 import { useState } from 'react';
 import type { AuditStatus } from '../../types/compliance';
+import { pickLocalized } from '../../i18n/locales';
 
 export function AuditDetailPage() {
   const { auditId } = useParams<{ auditId: string }>();
@@ -87,10 +88,10 @@ export function AuditDetailPage() {
                 background: `color-mix(in srgb, ${status.color} 14%, transparent)`,
               }}
             >
-              {status[lang]}
+              {pickLocalized(lang, status)}
             </span>
             <span className="text-ink-muted">
-              {AUDIT_TYPE_LABEL[audit.type]?.[lang] ?? audit.type}
+              {pickLocalized(lang, AUDIT_TYPE_LABEL[audit.type]) ?? audit.type}
             </span>
             {framework && (
               // Cross-link to the framework, which is a sibling branch of the
@@ -171,7 +172,7 @@ export function AuditDetailPage() {
                           : `color-mix(in srgb, ${m.color} 12%, transparent)`,
                       }}
                     >
-                      {m[lang]}
+                      {pickLocalized(lang, m)}
                     </button>
                   );
                 })}
@@ -211,7 +212,7 @@ export function AuditDetailPage() {
             'The audit and its history are removed. Remediation plans already generated are kept.',
           )}
           impact={[
-            { label: tr('Statut', 'Status'), value: status?.[lang] ?? audit.status },
+            { label: tr('Statut', 'Status'), value: pickLocalized(lang, status) ?? audit.status },
             {
               label: tr('Référentiel', 'Framework'),
               value: framework?.name ?? tr('Programme entier', 'Programme-wide'),

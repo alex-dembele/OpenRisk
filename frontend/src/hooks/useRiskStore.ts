@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { registerTenantStore } from '../lib/sessionScope';
 import { api } from '../lib/api';
+import { riskService } from '../services/riskService';
 import type { Asset } from './useAssetStore';
 import type { RiskControlMapping } from '../services/taxonomyService';
 import type { RiskState } from '../features/risks/useLifecycle';
@@ -145,8 +146,12 @@ interface RiskStore {
   clearSelection: () => void;
 
   // bulk operations
+  /**
+   * Delete a selection in one governed request. Rejects — leaving the store
+   * untouched — when the server refuses the batch; there is no partial outcome
+   * to report, by design (D-036).
+   */
   bulkDelete: (ids: string[]) => Promise<void>;
-  bulkUpdate: (ids: string[], payload: Partial<Risk>) => Promise<void>;
 
   // import / export helpers
   importRisks: (file: File) => Promise<void>;
@@ -317,40 +322,30 @@ export const useRiskStore = create<RiskStore>((set, get) => ({
   clearSelection: () => set({ selectedIds: [] }),
 
   // bulk operations
+  //
+  // ONE request, not one per row (#598). `POST /risks/bulk` is transactional and
+  // audited (#581): the batch either applies to every id or to none, and each
+  // deleted risk gets an audit entry naming the actor. The previous
+  // implementation fanned out `DELETE /risks/:id` through `Promise.all` under a
+  // comment claiming "backend may not provide bulk delete endpoint" — it does,
+  // and the fan-out produced N unattributable mutations that a rejection partway
+  // through left half-applied.
   bulkDelete: async (ids) => {
     set({ isLoading: true });
     const prev = get().risks;
     const prevTotal = get().total;
+    const prevSelection = get().selectedIds;
+    // Optimistic (ABSOLUTE RULE 10); restored byte-for-byte below if the server
+    // refuses, because under all-or-nothing a refusal means nothing was written.
     set((state) => ({
       risks: state.risks.filter((r) => !ids.includes(r.id)),
       total: Math.max(0, state.total - ids.length),
+      selectedIds: [],
     }));
     try {
-      // backend may not provide bulk delete endpoint; call per-id
-      await Promise.all(ids.map((id) => api.delete(`/risks/${id}`)));
-      // clear selection
-      set({ selectedIds: [] });
+      await riskService.bulkAction({ type: 'delete', risk_ids: ids });
     } catch (err) {
-      set({ risks: prev, total: prevTotal });
-      console.error('bulkDelete failed', err);
-      throw err;
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
-  bulkUpdate: async (ids, payload) => {
-    set({ isLoading: true });
-    const prev = get().risks;
-    // optimistic update
-    set((state) => ({
-      risks: state.risks.map((r) => (ids.includes(r.id) ? { ...r, ...payload } : r)),
-    }));
-    try {
-      await Promise.all(ids.map((id) => api.patch(`/risks/${id}`, payload)));
-    } catch (err) {
-      set({ risks: prev });
-      console.error('bulkUpdate failed', err);
+      set({ risks: prev, total: prevTotal, selectedIds: prevSelection });
       throw err;
     } finally {
       set({ isLoading: false });

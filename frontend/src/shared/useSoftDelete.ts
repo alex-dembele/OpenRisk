@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useUIStore } from '../store/uiStore';
+import type { LocaleCode } from '../i18n/locales';
 
 interface SoftDeleteOptions<T> {
   /** The real delete — fires only after the undo window elapses. */
@@ -22,7 +23,7 @@ interface SoftDeleteOptions<T> {
   /** Stable id accessor (defaults to item.id). */
   idOf?: (item: T) => string;
   /** Toast label, e.g. (r) => `Risk "${r.name}" deleted`. FR/EN via `lang`. */
-  message: (item: T, lang: 'fr' | 'en') => string;
+  message: (item: T, lang: LocaleCode) => string;
   /** Milliseconds the undo window stays open (default 5000). */
   delayMs?: number;
 }

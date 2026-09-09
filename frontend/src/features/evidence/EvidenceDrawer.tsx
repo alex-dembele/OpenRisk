@@ -16,6 +16,7 @@ import {
   useUpdateEvidence,
 } from './useEvidence';
 import { EVIDENCE_STATUS_META, EVIDENCE_TYPE_META, expiryLabel } from './evidenceMeta';
+import { localeTag } from '../../i18n/locales';
 
 export function EvidenceDrawer({
   evidenceId,
@@ -94,7 +95,7 @@ export function EvidenceDrawer({
                 </dt>
                 <dd className="text-ink mt-0.5">
                   {new Date(evidence.collected_at).toLocaleDateString(
-                    lang === 'fr' ? 'fr-FR' : 'en-GB',
+                    localeTag(lang),
                   )}
                 </dd>
               </div>
@@ -105,7 +106,7 @@ export function EvidenceDrawer({
                 <dd className="text-ink mt-0.5">
                   {evidence.valid_until
                     ? new Date(evidence.valid_until).toLocaleDateString(
-                        lang === 'fr' ? 'fr-FR' : 'en-GB',
+                        localeTag(lang),
                       )
                     : tr("N'expire pas", 'Never expires')}
                   {evidence.days_until_expiry !== undefined ? (

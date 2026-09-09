@@ -10,6 +10,7 @@
 // severity (with labels/legend), one hue for magnitude, ink tokens for text, and
 // they render in light + dark.
 
+import { localeTag, type LocaleCode } from '../../i18n/locales';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 import { CartesianChart, RadarChart } from '../../shared/ds/charts';
@@ -52,10 +53,10 @@ const SEV_COLOR: Record<string, string> = {
   ok: 'var(--low)',
 };
 
-function fmtInt(n: number, lang: string): string {
-  return Math.round(n).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US');
+function fmtInt(n: number, lang: LocaleCode): string {
+  return Math.round(n).toLocaleString(localeTag(lang));
 }
-function fmtCompactFCFA(n: number, lang: string): string {
+function fmtCompactFCFA(n: number, lang: LocaleCode): string {
   const abs = Math.abs(n);
   const u = lang === 'fr' ? { b: ' Md', m: ' M', k: ' k' } : { b: 'B', m: 'M', k: 'K' };
   const f = (v: number) => (lang === 'fr' ? v.toFixed(1).replace('.', ',') : v.toFixed(1));
@@ -117,7 +118,7 @@ export function ExecutiveDashboard() {
     );
   }
 
-  const gen = new Date(data.generated_at).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+  const gen = new Date(data.generated_at).toLocaleString(localeTag(lang), {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
@@ -253,7 +254,7 @@ function FinancialCard({
   tr,
 }: {
   data: ExecData;
-  lang: string;
+  lang: LocaleCode;
   tr: (f: string, e: string) => string;
 }) {
   const f = data.financial;
@@ -299,7 +300,7 @@ const KRI_ICON: Record<string, LucideIcon> = {
   avg_mttr_days: TrendingUp,
   compliance_coverage: ShieldCheck,
 };
-function KriStrip({ kris, lang }: { kris: KRI[]; lang: string }) {
+function KriStrip({ kris, lang }: { kris: KRI[]; lang: LocaleCode }) {
   if (kris.length === 0) return null;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -310,7 +311,7 @@ function KriStrip({ kris, lang }: { kris: KRI[]; lang: string }) {
           k.unit === '%'
             ? `${fmtInt(k.value, lang)} %`
             : k.unit === 'days'
-              ? `${k.value.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 1 })} ${lang === 'fr' ? 'j' : 'd'}`
+              ? `${k.value.toLocaleString(localeTag(lang), { maximumFractionDigits: 1 })} ${lang === 'fr' ? 'j' : 'd'}`
               : fmtInt(k.value, lang);
         return (
           <Card key={k.key} style={{ padding: '13px 15px' }}>
@@ -374,7 +375,7 @@ function RiskDistributionCard({
   tr,
 }: {
   slices: DistributionSlice[];
-  lang: string;
+  lang: LocaleCode;
   tr: (f: string, e: string) => string;
 }) {
   const data: PieRow[] = slices
@@ -441,7 +442,7 @@ function TopRisksCard({
   tr,
 }: {
   risks: ExecRisk[];
-  lang: string;
+  lang: LocaleCode;
   tr: (f: string, e: string) => string;
 }) {
   return (

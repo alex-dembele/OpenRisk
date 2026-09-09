@@ -20,6 +20,7 @@ import { routeTrail } from './routeModel';
 import { useUIStrings } from './uiStrings';
 import { useUIStore } from '../store/uiStore';
 import { useCrumbLabels } from './crumbLabels';
+import { pickLocalized } from '../i18n/locales';
 
 export function Breadcrumbs() {
   const { pathname } = useLocation();
@@ -46,7 +47,7 @@ export function Breadcrumbs() {
         const isLast = i === trail.length - 1;
         const label =
           (step.node.dynamic ? labels[step.href] : undefined) ??
-          (step.node.labelKey ? L[step.node.labelKey] : step.node.label?.[lang]) ??
+          (step.node.labelKey ? L[step.node.labelKey] : pickLocalized(lang, step.node.label)) ??
           '';
         return (
           <span key={step.href} className="flex items-center gap-1.5 min-w-0">

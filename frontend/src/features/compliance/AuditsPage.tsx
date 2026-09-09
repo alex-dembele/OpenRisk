@@ -5,6 +5,7 @@
 // GET/POST/PATCH/DELETE /compliance/audits. Schedule an audit, move it through
 // its lifecycle (planned → in progress → completed), and keep the history.
 
+import { localeTag } from '../../i18n/locales';
 import { useMemo, useState } from 'react';
 import { CalendarClock, Plus, Trash2, Wand2, ArrowLeft } from 'lucide-react';
 import { useNavigate, Link } from 'react-router';
@@ -62,7 +63,7 @@ export function AuditsPage() {
       : tr('Programme entier', 'Whole program');
   const fmtDate = (d: string | null) =>
     d
-      ? new Date(d).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+      ? new Date(d).toLocaleDateString(localeTag(lang), {
           day: '2-digit',
           month: 'short',
           year: 'numeric',

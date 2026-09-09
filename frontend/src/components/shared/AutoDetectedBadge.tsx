@@ -3,6 +3,7 @@
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Affero General Public License v3.0 (see LICENSE).
 
+import { useFormat } from '../../hooks/useI18n';
 import { motion } from 'framer-motion';
 import { Zap } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
@@ -25,6 +26,7 @@ export const AutoDetectedBadge = ({
   size = 'md',
   className,
 }: AutoDetectedBadgeProps) => {
+  const fmt = useFormat();
   const sizeClasses = {
     sm: 'px-2 py-1 text-xs gap-1',
     md: 'px-3 py-1.5 text-sm gap-1.5',
@@ -38,7 +40,7 @@ export const AutoDetectedBadge = ({
   const formatTime = (isoString?: string) => {
     if (!isoString) return '';
     const date = new Date(isoString);
-    return date.toLocaleString('fr-FR', {
+    return fmt.dateTime(date, {
       day: '2-digit',
       month: '2-digit',
       hour: '2-digit',

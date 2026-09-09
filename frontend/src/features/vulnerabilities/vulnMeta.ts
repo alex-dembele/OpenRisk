@@ -5,6 +5,7 @@
 // ingest modal. Kept in one place so the vocabulary stays consistent.
 
 import type { VulnSeverity, VulnStatus, VulnSource } from './vulnerabilityService';
+import type { LocaleCode } from '../../i18n/locales';
 
 export const SEVERITY_META: Record<VulnSeverity, { label: [string, string]; color: string }> = {
   critical: { label: ['Critique', 'Critical'], color: 'var(--critical)' },
@@ -51,4 +52,4 @@ export const SOURCE_LABEL: Record<VulnSource, string> = {
   manual: 'Manuel',
 };
 
-export const pick = <T>(v: [T, T], lang: 'fr' | 'en'): T => (lang === 'fr' ? v[0] : v[1]);
+export const pick = <T>(v: [T, T], lang: LocaleCode): T => (lang === 'fr' ? v[0] : v[1]);

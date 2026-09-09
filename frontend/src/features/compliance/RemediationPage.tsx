@@ -6,6 +6,7 @@
 // and track status (open → in progress → completed). Plans link back to the
 // compliance control they remediate.
 
+import { localeTag } from '../../i18n/locales';
 import { useMemo, useState } from 'react';
 import { Wrench, Plus, Trash2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useNavigate, Link } from 'react-router';
@@ -59,7 +60,7 @@ export function RemediationPage() {
 
   const fmtDate = (d: string | null) =>
     d
-      ? new Date(d).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+      ? new Date(d).toLocaleDateString(localeTag(lang), {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
