@@ -5,29 +5,6 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-### D-040 — what plan should a self-hosted instance get? · raised 2026-09-09
-**Context** — #328 asked for documentation of "self-hosted (functionally
-Free/Pro equivalent) vs commercial". Measured: a self-hosted instance is **Free,
-and only Free**. `POST /auth/register` creates the organisation without setting
-a plan (`backend/internal/application/auth/register.go:106`), so `ParsePlan("")`
-resolves to `PlanFree` — **2 users, 50 risks, 50 assets, 1 integration**, API
-`limited`, compliance `basic`, and **off** for automation, AI advisor, scanner,
-SmartScore and the executive dashboard.
-**Why this reaches you** — it is a pricing decision, not an implementation one.
-A community user who self-hosts, reads "open source", and hits a 2-user cap on
-their own hardware will say so publicly.
-**Options** — (A) leave it: self-hosted = Free, paid plans need a subscription;
-(B) self-hosted defaults to Pro-equivalent, SaaS keeps the paid tiers;
-(C) a distinct "community" plan in the matrix with its own caps.
-**Chosen while waiting** — (A), documented truthfully. `docs/SELF_HOSTING.md`
-now publishes the real matrix, generated from the code, so whatever you decide
-the page cannot lie about it.
-**Cost of delay** — every self-host install between now and the decision forms
-its impression of the product on Free's caps.
-**Recommendation** — (C). It separates "what we give the community" from "what
-the SaaS free tier is", so neither constrains the other. It is a new entry in
-`matrix` plus a default at registration.
-
 ### D-041 — may the backend container generate its own RS256 keypair? · raised 2026-09-09
 **Context** — #328's criterion 5 wants a one-click deploy to a third-party
 platform (Render/Railway/Fly). It cannot be built today: the backend panics at
@@ -55,6 +32,42 @@ operator who meant to supply their own finds out immediately.
 
 
 ## Resolved
+
+### D-040 — what a self-hosted instance gets · decided 2026-09-09
+**Decided (owner)** — "Si une personne veut héberger lui-même tout sera gratuit
+sauf ce qui nécessite un appel API que j'ai configuré, un peu comme avec l'IA —
+il ne l'aura pas."
+
+Self-hosting is **free and complete**. The line is not features-versus-features
+and not volume: it is **who pays for the outbound call**. Anything that runs on
+the operator's own infrastructure is included. Anything that consumes an API the
+owner configures and is billed for is not.
+
+**Mapping, established from the code rather than assumed:**
+
+| Capability | Outbound call the owner pays for? | Self-hosted |
+|---|---|---|
+| Smart risk score, financial quantification, executive dashboard | no — local computation | included |
+| Infra scanner | no — the agent registers with the operator's own instance (`/scanner/agents/register`) | included |
+| Threat intel (CTI) | no — NVD and CISA KEV, free public feeds (`pkg/cti/client.go`) | included |
+| Compliance frameworks, automation, governance, REST API, SSO, multi-tenant | no | included |
+| **AI advisor** | **yes — `ANTHROPIC_API_KEY` (`pkg/ai/claude_advisor.go`)** | operator's own key, or the existing no-LLM template fallback |
+| Support, SLA | a service the owner renders, not software | community support, no SLA |
+| Users / risks / assets / integrations | it is the operator's own hardware | uncapped |
+
+**Reading applied to the AI row** — the owner's objection is to paying for other
+people's inference, not to the feature existing. A self-hoster who supplies their
+own `ANTHROPIC_API_KEY` costs the owner nothing, and `pkg/ai` already degrades to
+`template_advisor.go` when no key is present ("Réponse générée sans LLM"). So the
+feature is granted and simply does nothing without a key, rather than being
+blocked. **If the intent was that self-hosted has no AI at all even with the
+operator's own key, say so and the row flips.**
+
+**Consequence** — self-hosted can no longer resolve to `PlanFree`, which caps it
+at 2 users and 50 risks. It needs its own entitlement set. Implementation is
+issue #612; #415 is unaffected, since that issue is about the hosted plan matrix
+and this decision is about self-hosting.
+
 
 <!-- Append: date · decision · rationale · issues unblocked -->
 
