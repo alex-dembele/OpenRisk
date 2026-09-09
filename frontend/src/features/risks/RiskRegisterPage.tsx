@@ -77,6 +77,7 @@ import { useUIStore } from '../../store/uiStore';
 import { useRiskStore, type RiskPhase } from '../../hooks/useRiskStore';
 import { useFocusParam } from '../../shared/useFocusParam';
 import { useAuthStore } from '../../hooks/useAuthStore';
+import { isMissingRows } from '../../services/bulkService';
 import { mapRisk, relTime, type UiRisk } from './riskMap';
 import { EditRiskModal } from './components/EditRiskModal';
 import { CreateMitigationModal } from '../mitigations/CreateMitigationModal';
@@ -145,6 +146,7 @@ export function RiskRegisterPage() {
   const loadError = useRiskStore((s) => s.error);
   const fetchRisks = useRiskStore((s) => s.fetchRisks);
   const deleteRisk = useRiskStore((s) => s.deleteRisk);
+  const bulkDelete = useRiskStore((s) => s.bulkDelete);
   const canUpdate = useAuthStore((s) => s.hasPermission('risks:update'));
   const { data: categories } = useRiskCategories();
   const canDelete = useAuthStore((s) => s.hasPermission('risks:delete'));
@@ -494,16 +496,38 @@ export function RiskRegisterPage() {
         icon: Trash2,
         danger: true,
         hidden: !canDelete,
-        // Per-id API: refuse to pretend we can delete "all N results" in one go.
+        // The governed endpoint takes explicit ids and caps a batch at 100, so it
+        // cannot address "all N results" — the largest page is exactly 100. This
+        // is a property of the API, not a UI limitation we could lift here.
         selectionOnly: true,
+        // ONE request (#598). `POST /risks/bulk` is transactional and audited:
+        // every named risk is deleted or none is, and each deletion is recorded
+        // against the actor. The bar shows its own error state on rejection; the
+        // toast is what says *why*, because under all-or-nothing the fact that
+        // nothing was deleted is the part the user has to know.
         run: async ({ ids }) => {
-          await Promise.all(ids.map((id) => deleteRisk(id)));
+          try {
+            await bulkDelete(ids);
+          } catch (err) {
+            toast.error(
+              isMissingRows(err)
+                ? tr(
+                    'Aucun risque supprimé : la sélection a changé. Rechargez et réessayez.',
+                    'No risk deleted: the selection has changed. Reload and try again.',
+                  )
+                : tr(
+                    `Aucun risque supprimé (${ids.length} sélectionné(s)).`,
+                    `No risk deleted (${ids.length} selected).`,
+                  ),
+            );
+            throw err;
+          }
           toast.success(tr(`${ids.length} risque(s) supprimé(s)`, `${ids.length} risk(s) deleted`));
           reload();
         },
       },
     ],
-    [L, canDelete, deleteRisk, reload],
+    [L, canDelete, bulkDelete, reload],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   const critCount = ui.filter((r) => r.crit === 'critical').length;
