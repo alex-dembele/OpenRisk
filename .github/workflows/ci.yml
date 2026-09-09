@@ -56,6 +56,13 @@ jobs:
       - name: Run unit tests
         run: cd backend && go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
+      # The self-hosting capability table in docs/SELF_HOSTING.md is GENERATED
+      # from pkg/entitlements (#328). That file lives outside the Go module, so
+      # the test cache cannot see it change and a hand-edited table would pass
+      # from cache — `-count=1` is what makes this gate real.
+      - name: Published self-hosting matrix still matches the code
+        run: cd backend && go test -count=1 ./pkg/entitlements/ -run TestSelfHostDoc
+
       - name: Check coverage threshold (50%)
         run: |
           cd backend

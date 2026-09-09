@@ -12,6 +12,7 @@ on:
   workflow_dispatch: {}
   pull_request:
     paths:
+      - 'install.sh'
       - 'scripts/install.sh'
       - 'scripts/backup.sh'
       - 'scripts/restore.sh'
@@ -40,12 +41,49 @@ jobs:
 
       - name: Run the one-command installer (no manual steps)
         run: |
-          chmod +x scripts/install.sh
-          ./scripts/install.sh
+          chmod +x install.sh scripts/install.sh
+          # stdout goes to a file rather than the job log: since #328 the
+          # installer prints the generated first-administrator password, and a
+          # public Actions log is not the place for it. Redacted before echoing.
+          if ! ./install.sh > install.log 2>&1; then
+            sed 's/Password: .*/Password: ***REDACTED***/' install.log
+            exit 1
+          fi
+          sed 's/Password: .*/Password: ***REDACTED***/' install.log
 
       - name: Assert API health
         run: |
           curl -fsS http://localhost:8080/api/v1/health
+
+      # The install is only finished if the operator can actually get in. #328's
+      # criterion 1 is exactly this: credentials at the end, not a README telling
+      # you to go and make an account. Asserting the printed pair really signs in
+      # is what keeps that criterion honest.
+      - name: The printed administrator credentials sign in (#328)
+        run: |
+          email=$(sed -n 's/.*• Email: *//p' install.log | head -1 | tr -d '\r')
+          password=$(sed -n 's/.*• Password: *//p' install.log | head -1 | tr -d '\r')
+          echo "::add-mask::$password"
+          test -n "$email"    || { echo "the installer printed no admin email";    exit 1; }
+          test -n "$password" || { echo "the installer printed no admin password"; exit 1; }
+          echo "installer printed credentials for $email"
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -X POST http://localhost:8080/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"$password\"}")
+          echo "POST /auth/login → $code"
+          test "$code" = "200"
+
+      # Criterion 3: a second run must not make a second account, and must say so.
+      - name: Re-running the installer is idempotent (#328)
+        run: |
+          if ! ./install.sh > install2.log 2>&1; then
+            sed 's/Password: .*/Password: ***REDACTED***/' install2.log
+            exit 1
+          fi
+          sed 's/Password: .*/Password: ***REDACTED***/' install2.log
+          grep -q "Unchanged from your existing install" install2.log || {
+            echo "the second run did not report the existing administrator"; exit 1; }
 
       - name: Assert entitlements endpoint is served (open-core is wired)
         run: |

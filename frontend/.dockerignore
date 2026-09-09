@@ -1,0 +1,17 @@
+# Build context hygiene for the frontend image. node_modules alone is ~700 MB
+# and is reinstalled from the lockfile inside the builder anyway.
+node_modules
+dist
+.vite
+
+# Test and CI artifacts.
+test-results
+playwright-report
+e2e/.auth
+coverage
+
+# Local env files and editor state.
+.env
+.env.*
+.vscode
+.idea
