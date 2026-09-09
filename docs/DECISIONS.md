@@ -5,7 +5,54 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-None. Every entry in this register is resolved as of 2026-09-07.
+### D-040 — what plan should a self-hosted instance get? · raised 2026-09-09
+**Context** — #328 asked for documentation of "self-hosted (functionally
+Free/Pro equivalent) vs commercial". Measured: a self-hosted instance is **Free,
+and only Free**. `POST /auth/register` creates the organisation without setting
+a plan (`backend/internal/application/auth/register.go:106`), so `ParsePlan("")`
+resolves to `PlanFree` — **2 users, 50 risks, 50 assets, 1 integration**, API
+`limited`, compliance `basic`, and **off** for automation, AI advisor, scanner,
+SmartScore and the executive dashboard.
+**Why this reaches you** — it is a pricing decision, not an implementation one.
+A community user who self-hosts, reads "open source", and hits a 2-user cap on
+their own hardware will say so publicly.
+**Options** — (A) leave it: self-hosted = Free, paid plans need a subscription;
+(B) self-hosted defaults to Pro-equivalent, SaaS keeps the paid tiers;
+(C) a distinct "community" plan in the matrix with its own caps.
+**Chosen while waiting** — (A), documented truthfully. `docs/SELF_HOSTING.md`
+now publishes the real matrix, generated from the code, so whatever you decide
+the page cannot lie about it.
+**Cost of delay** — every self-host install between now and the decision forms
+its impression of the product on Free's caps.
+**Recommendation** — (C). It separates "what we give the community" from "what
+the SaaS free tier is", so neither constrains the other. It is a new entry in
+`matrix` plus a default at registration.
+
+### D-041 — may the backend container generate its own RS256 keypair? · raised 2026-09-09
+**Context** — #328's criterion 5 wants a one-click deploy to a third-party
+platform (Render/Railway/Fly). It cannot be built today: the backend panics at
+boot without an RS256 keypair (`internal/config/config.go:71`), and no PaaS
+blueprint can generate a PEM — Render's `generateValue` makes random strings,
+not keypairs. So any button would ask the user to paste a private key, which is
+not one click and is a bad first instruction to give someone.
+An **uncommitted** `backend/docker-entrypoint.sh` in the working tree already
+solves it: it generates a 2048-bit pair into the secrets volume on first boot,
+under `umask 077`, and never overwrites anything supplied. Nothing references
+it — no Dockerfile, no compose file.
+**Why this reaches you** — wiring it in changes an auth/crypto behaviour, not a
+bug: the failure mode moves from "refuse to boot until an operator supplies
+keys" to "quietly mint keys". That is the redesign CLAUDE.md reserves for you.
+The consequence to weigh: a key born inside an ephemeral container is lost when
+the volume is, and every token signed by it dies with it.
+**Options** — (A) wire the entrypoint in for self-host/PaaS images only, keeping
+fail-fast for production images; (B) wire it in everywhere; (C) leave it, and
+ship no one-click deploy.
+**Chosen while waiting** — (C). #328 ships without criterion 5 rather than with
+an unverifiable button; nothing was wired in.
+**Cost of delay** — the one-click acquisition channel stays closed.
+**Recommendation** — (A), plus a startup warning naming the generated key, so an
+operator who meant to supply their own finds out immediately.
+
 
 ## Resolved
 
