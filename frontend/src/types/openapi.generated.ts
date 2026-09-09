@@ -1439,6 +1439,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/saved-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the saved views the caller may see
+         * @description The caller's own views for a register, plus every view their tenant has shared. A personal view belonging to another user is never returned, not even to a tenant admin. Omitting `table_id` returns the views of every register, which is what the one-time localStorage migration reads.
+         */
+        get: operations["listSavedViews"];
+        put?: never;
+        /** Save a new view of a register */
+        post: operations["createSavedView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/saved-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved view */
+        delete: operations["deleteSavedView"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, re-share or re-point a saved view
+         * @description A patch: an absent field is left alone, so renaming a view cannot silently reset its filters. Only the view's owner, or a tenant admin, may change it.
+         */
+        patch: operations["updateSavedView"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2564,6 +2606,79 @@ export interface components {
             ids?: string[];
             /** @description Audit entries written. Below `applied` only if the trail was unavailable; the mutation still happened and the gap is reported. */
             audited?: number;
+        };
+        /**
+         * @description `personal` — only its owner sees it. `shared` — every member of the same tenant sees it. Sharing never crosses a tenant, and there is nothing in between on purpose: a view shared with a named subset of people is a permissions design, not a table feature.
+         * @enum {string}
+         */
+        SavedViewVisibility: "personal" | "shared";
+        SavedViewSort: {
+            /** @description The column the view sorts on. */
+            key: string;
+            /** @enum {string} */
+            dir: "asc" | "desc";
+        };
+        /** @description The part of the table state a view restores. Page and page size are deliberately absent — "page 3" is not part of what a view means. */
+        SavedViewState: {
+            /** @description The instant search term. Empty when the view carries none. */
+            q: string;
+            /** @description Facet key → selected values. Null when the view carries no facet selection at all. At most 40 facets, each with at most 200 values. */
+            filters: {
+                [key: string]: string[];
+            } | null;
+            /** @description Null when the view does not pin a sort. */
+            sort: components["schemas"]["SavedViewSort"] | null;
+        };
+        /** @description The column layout the view restores. Keys the current build does not know are dropped on read rather than rejected, so a view saved before a column was removed still opens. At most 200 entries per list. */
+        SavedViewColumns: {
+            order: string[] | null;
+            hidden: string[] | null;
+        };
+        /** @description One named view of one register, owned by one user inside one tenant. Server-side since #580, so it survives a browser and can be handed to a colleague. A usability capability, not a compliance control. */
+        SavedView: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The owning tenant. Every read of this resource filters on it.
+             */
+            tenant_id: string;
+            /**
+             * Format: uuid
+             * @description The owner — the only person who may edit it, plus tenant admins.
+             */
+            user_id: string;
+            /**
+             * @description The register the view belongs to. A free string on purpose: the eighth register does not need a migration.
+             * @example risks
+             */
+            table_id: string;
+            name: string;
+            visibility: components["schemas"]["SavedViewVisibility"];
+            state: components["schemas"]["SavedViewState"];
+            columns: components["schemas"]["SavedViewColumns"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Resolved on read for display ("shared by Amina"). Not a column, and absent when the server could not resolve a name. */
+            owner_email?: string;
+        };
+        CreateSavedViewInput: {
+            /** @example risks */
+            table_id: string;
+            name: string;
+            /** @description Defaults to `personal` when omitted. Sharing is an explicit act: a default of shared would publish one user's working view to their whole institution. */
+            visibility?: components["schemas"]["SavedViewVisibility"];
+            state?: components["schemas"]["SavedViewState"];
+            columns?: components["schemas"]["SavedViewColumns"];
+        };
+        /** @description A patch. Every field is optional and an absent one is left untouched, so renaming a view cannot silently reset its filters. A present `state` or `columns` replaces the stored one whole. */
+        UpdateSavedViewInput: {
+            name?: string;
+            visibility?: components["schemas"]["SavedViewVisibility"];
+            state?: components["schemas"]["SavedViewState"];
+            columns?: components["schemas"]["SavedViewColumns"];
         };
         ErrorResponse: {
             /** @example Invalid input */
@@ -5423,6 +5538,190 @@ export interface operations {
                 content?: never;
             };
             /** @description The selection changed since it was previewed. Nothing was modified. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSavedViews: {
+        parameters: {
+            query?: {
+                /** @description The register the views belong to — the same id the table is mounted with ("risks", "vulnerabilities", "assets", …). Omit for all of them. */
+                table_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The views this caller may see, most recent first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSavedViewInput"];
+            };
+        };
+        responses: {
+            /** @description The view as stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            /** @description Invalid body, or a value outside its bounds — name over 120 characters, table_id over 64, more than 40 facets, more than 200 values in one facet, or more than 200 columns. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This user already has a view of that name on that register. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. Soft-deleted server-side; it does not come back. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller neither owns this view nor administers the tenant. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such view for this tenant. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSavedViewInput"];
+            };
+        };
+        responses: {
+            /** @description The view as stored after the patch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            /** @description Invalid id, invalid body, or a value outside its bounds. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller neither owns this view nor administers the tenant. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such view for this tenant. An id belonging to another tenant answers identically, deliberately: a 403 would confirm it exists. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This user already has another view of that name on that register. */
             409: {
                 headers: {
                     [name: string]: unknown;

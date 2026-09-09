@@ -5,38 +5,23 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-### D-037 — English date order: `en-US` everywhere, or `en-GB`? · raised 2026-09-08
-**Context** — #315 gave every locale exactly one BCP-47 tag in
-`frontend/src/i18n/locales.ts`. Before it, English dates were formatted as
-`en-GB` on fifteen screens and `en-US` on nine, so the same product showed
-`12/03/2026` and `03/12/2026` for the same day depending on which page you were
-on. Centralizing forces one answer.
-**Chosen while waiting** — `en` → `en-US`. It matches the majority of the
-existing sites and the USA is a named market in CLAUDE.md. The change is live on
-the #315 branch.
-**Cost of the alternative** — `en-GB` is the day-first order Belgium, Canada,
-the Maghreb and Sub-Saharan Africa read, and it matches French, so a bilingual
-user switching languages would not see the digits reorder. Switching is a
-one-character edit to `LOCALES.en.tag` plus the two assertions in
-`frontend/src/i18n/__tests__/format.test.ts`.
-**Cost of delay** — near zero now, real once customers have screenshots and
-exported reports in circulation.
-**Recommendation** — keep `en-US` unless a launch customer is UK/Commonwealth.
+### D-039 — should `master` refuse a merge while CI is red? · raised 2026-09-09
+**Context** — #608 found `npm run build` broken on `master`. The gate that
+should have caught it was not missing: `frontend-typecheck` in `.github/
+workflows/ci.yml` **ran and failed** on PR #601's branch (run 34209169493 —
+Frontend Typecheck: failure, Build Frontend: skipped), and the PR was merged
+anyway. Six of that run's twelve jobs were red.
+**So the fix for #608 is not a new CI step.** The step exists and worked. What
+is missing is anything that makes a red run block a merge.
+**Options** — (A) branch protection on `master` requiring `CI Status` green;
+(B) required reviewers plus a manual rule; (C) leave it, and accept that the
+owner reads CI before merging.
+**Cost of delay** — this already cost one broken `master` and one P0. The next
+one is silent until someone tries to build.
+**Recommendation** — (A). It is a repository setting, it is reversible, and it
+costs nothing when CI is green. It needs the owner: an agent cannot change
+branch protection, and turning it on will block merges that are red today.
 
-### D-038 — should a first visit follow the browser's language? · raised 2026-09-08
-**Context** — the registry gained `negotiateLocale()`, which picks the best
-offered language out of an `Accept-Language`-shaped list, with q-weights. It is
-implemented and tested. Wiring it to `navigator.languages` was **reverted** on
-#315 before commit: it changed the first-visit default from French to English on
-any English-configured machine, which is a product decision, not a refactor.
-**Chosen while waiting** — first visit stays French, as designed. A stored
-preference always wins.
-**Options** — (A) keep French always; (B) negotiate from the browser and fall
-back to French; (C) negotiate only when the tenant has no declared default.
-**Cost of delay** — none. The function is already there; wiring it is three
-lines in `frontend/src/store/uiStore.ts`.
-**Recommendation** — (A) until the marketing site reports meaningful non-French
-first-touch traffic; the current default is right for the primary market.
 
 ## Resolved
 
