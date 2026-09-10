@@ -2898,7 +2898,16 @@ func main() {
 	protected.Post("/onboarding/complete", activationHandler.CompleteOnboarding)
 	protected.Get("/onboarding/recognition", activationHandler.GetRecognition)
 	protected.Get("/onboarding/starter-risks", activationHandler.GetStarterRisks)
-	protected.Post("/onboarding/starter-risks", activationHandler.AdoptStarterRisks)
+	// The POST WRITES REAL RISKS into the tenant's register, so it carries the
+	// same permission as every other risk-creation path. The tunnel is walked by
+	// invited members too, and one without `risks:create` must not be able to
+	// put three rows in a register they may not write to.
+	//
+	// The client treats the resulting 403 the way it treats a 409: the step
+	// advances without adopting. A blocking tunnel that refuses to advance
+	// because of a permission the user will never have would lock them out of
+	// the product — the failure #438's Risk section names.
+	protected.Post("/onboarding/starter-risks", riskCreate, activationHandler.AdoptStarterRisks)
 	protected.Put("/onboarding/steps/:step", activationHandler.SaveOnboardingStep)
 
 	// The Posture Reveal (#438). Outside the /onboarding group on purpose: it is

@@ -310,7 +310,7 @@ export function GoalStep() {
         // A 409 means this tenant already adopted — expected on a resumed
         // tunnel, and not a reason to block the user on a screen they finished.
         onError: (err: unknown) => {
-          if (isConflict(err)) go({ goal, starter_risks: picked }, 1);
+          if (isExpectedAdoptionRefusal(err)) go({ goal, starter_risks: picked }, 1);
         },
       });
       return;
@@ -375,7 +375,7 @@ export function GoalStep() {
         pick={pick}
         alreadyAdopted={alreadyAdopted}
         onToggle={toggle}
-        failed={adopt.isError && !isConflict(adopt.error)}
+        failed={adopt.isError && !isExpectedAdoptionRefusal(adopt.error)}
         lang={lang}
         tr={tr}
       />
@@ -536,10 +536,23 @@ function StarterRiskPicker({
   );
 }
 
-/** A 409 from the adoption endpoint means "already done", not "failed". */
-function isConflict(err: unknown): boolean {
+/**
+ * Answers the adoption endpoint gives that are NOT failures to retry.
+ *
+ *   409 — this tenant already adopted. The tunnel is resumable by design, so a
+ *         user WILL come back to this step; a second adoption is refused rather
+ *         than doubling their register.
+ *   403 — the caller may not create risks. POST /onboarding/starter-risks
+ *         carries `risks:create` like every other risk write, and an invited
+ *         member without it must still be able to finish the tunnel: it blocks
+ *         the whole app, so refusing to advance over a permission they will
+ *         never have would lock them out of the product.
+ *
+ * Both let the step advance. Neither writes anything.
+ */
+function isExpectedAdoptionRefusal(err: unknown): boolean {
   const status = (err as { response?: { status?: number } } | null)?.response?.status;
-  return status === 409;
+  return status === 409 || status === 403;
 }
 
 // ---------------------------------------------------------------------------
