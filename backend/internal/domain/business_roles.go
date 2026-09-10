@@ -51,6 +51,13 @@ const (
 	// their invitations, the membership audit trail and the org profile.
 	PermGroupOrg PermissionGroup = "organization"
 
+	// PermGroupRealtime covers the server-sent event streams the UI subscribes
+	// to. It is a real gate: /api/v1/realtime/events is mounted behind
+	// RequirePermission("events:read") (main.go), and the mitigation stream
+	// validates the same token itself because native EventSource cannot send an
+	// Authorization header.
+	PermGroupRealtime PermissionGroup = "realtime"
+
 	// PermGroupGovernance covers the immutable audit trail and the approval
 	// machinery. Its routes are guarded by the admin ROLE today, so an admin
 	// already passes through "*"; the strings exist so an auditor or an internal
@@ -137,6 +144,11 @@ var PermissionCatalog = []PermissionDef{
 	{"organization:members:update", PermGroupOrg, "Modifier le rôle des membres", "Change member roles"},
 	{"organization:members:deactivate", PermGroupOrg, "Désactiver ou révoquer des membres", "Deactivate or revoke members"},
 	{"organization:audit:read", PermGroupOrg, "Consulter l'audit des accès", "Read membership audit"},
+	// Realtime. Every business role preset already grants this, and
+	// /api/v1/realtime/events already enforces it — the key was simply missing
+	// from the catalog, so ValidateBusinessRoles rejected all eleven presets and
+	// the RBAC matrix could not show a permission the API was really applying.
+	{"events:read", PermGroupRealtime, "Recevoir les événements temps réel", "Receive real-time events"},
 	// Governance. The entity drawer's audit tab (W1-02) gates on this: the
 	// timeline says what changed, the audit trail carries the before/after
 	// snapshot, the actor's IP and the request id, and those are not the same
