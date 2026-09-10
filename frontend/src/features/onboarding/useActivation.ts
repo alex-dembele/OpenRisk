@@ -10,7 +10,7 @@
 // exported so any feature that creates a risk / imports a framework / invites a
 // teammate can do the same.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -21,6 +21,8 @@ import {
   type Lang,
   type OnboardingState,
   type OnboardingStepKey,
+  type PostureSummary,
+  type Recognition,
 } from '../../services/activationService';
 import { confetti } from '../../shared/celebrate';
 
@@ -28,6 +30,8 @@ import { confetti } from '../../shared/celebrate';
 export const ACTIVATION_QUERY_KEY = ['activation', 'state'];
 export const ONBOARDING_QUERY_KEY = ['onboarding', 'state'];
 export const ONBOARDING_SUGGESTIONS_KEY = ['onboarding', 'suggestions'];
+export const POSTURE_QUERY_KEY = ['posture'];
+export const RECOGNITION_QUERY_KEY = ['onboarding', 'recognition'];
 
 /** The activation checklist, straight from the server. */
 export function useActivationState(enabled = true) {
@@ -170,6 +174,100 @@ export function useOnboardingSuggestions(params?: {
     queryFn: () => activationService.getSuggestions(params),
     staleTime: 5 * 60_000,
   });
+}
+
+/**
+ * The Posture Reveal.
+ *
+ * `retry: false` is deliberate and is criterion 8's client half. A 404 here is
+ * not a transient failure, it is the server saying "there is nothing to reveal
+ * and I recorded nothing" — retrying it three times would fire three reveal
+ * attempts and turn one honest refusal into a spinner that never resolves.
+ *
+ * `staleTime: 0` because the reveal is a measured moment, not a cached view: a
+ * user who adds a control and comes back must see the residual move.
+ */
+export function usePosture(enabled = true) {
+  return useQuery<PostureSummary>({
+    queryKey: POSTURE_QUERY_KEY,
+    queryFn: () => activationService.getPosture(),
+    enabled,
+    retry: false,
+    staleTime: 0,
+  });
+}
+
+/** What the tenant already holds — the recognition screen (criterion 9). */
+export function useRecognition(enabled = true) {
+  return useQuery<Recognition>({
+    queryKey: RECOGNITION_QUERY_KEY,
+    queryFn: () => activationService.getRecognition(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * True when the viewer has asked not to be animated.
+ *
+ * Read through a hook rather than a media query inside each component so a
+ * single place decides, and so criterion 13 can be tested by mocking one thing.
+ * Subscribes to changes: a user who flips the OS setting with the tab open must
+ * not have to reload to be obeyed.
+ */
+export function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  return reduced;
+}
+
+/**
+ * Counts from 0 to `target` over `durationMs`, or lands on `target` immediately
+ * when the viewer prefers reduced motion (criterion 13).
+ *
+ * The reduced-motion branch is not a shorter animation, it is NO animation: the
+ * final state renders directly, which is what the criterion asks for and what a
+ * vestibular disorder requires.
+ */
+export function useCountUp(target: number, durationMs = 900): number {
+  const reduced = usePrefersReducedMotion();
+  // Progress, not the value. Keeping the 0..1 ratio in state rather than the
+  // scaled number means the reduced-motion branch needs no setState at all —
+  // it simply returns the target — and the effect never calls setState
+  // synchronously in its own body.
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (reduced) return;
+
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const ratio = Math.min(1, (now - start) / durationMs);
+      setProgress(ratio);
+      if (ratio < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, durationMs, reduced]);
+
+  // Criterion 13: reduced motion renders the FINAL state directly. Not a
+  // shorter animation — no animation.
+  if (reduced) return target;
+  // easeOutCubic: fast then settling, so the number reads as "computed" rather
+  // than as a slot machine.
+  return target * (1 - Math.pow(1 - progress, 3));
 }
 
 /** Convenience: the next step the user should act on, or undefined when done. */

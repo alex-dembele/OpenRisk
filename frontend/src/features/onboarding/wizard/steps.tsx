@@ -9,7 +9,7 @@
 //   • Skippable where honest — the team step says so out loud, because pretending
 //     an invitation is mandatory is how you lose someone on their first day.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, ArrowRight, Check, Copy, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,7 +24,7 @@ import {
   useSaveOnboardingStep,
 } from '../useActivation';
 import { useCatalogs, useImportCatalogAsFramework } from '../../compliance/useCompliance';
-import { WIZARD_STEPS, stepPath } from './OnboardingWizard';
+import { WIZARD_STEPS, stepPath } from './wizardSteps';
 import type { LocaleCode } from '../../../i18n/locales';
 
 // ---------------------------------------------------------------------------
@@ -70,6 +70,11 @@ function StepShell({
   nextDisabled,
   busy,
   secondary,
+  error,
+  onRetry,
+  errorLabel,
+  errorHint,
+  retryLabel,
 }: {
   title: string;
   subtitle: string;
@@ -80,6 +85,12 @@ function StepShell({
   nextDisabled?: boolean;
   busy?: boolean;
   secondary?: React.ReactNode;
+  /** True when the last save failed. The user stays on this step. */
+  error?: boolean;
+  onRetry?: () => void;
+  errorLabel?: string;
+  errorHint?: string;
+  retryLabel?: string;
 }) {
   return (
     <form
@@ -89,10 +100,53 @@ function StepShell({
       }}
       style={{ animation: 'or-fadeup .35s ease' }}
     >
-      <h1 className="disp text-[24px] font-bold text-ink mb-1.5">{title}</h1>
+      {/* tabIndex -1 so the shell can move focus here on every step change
+          (criterion 12): a screen-reader user is told where they landed instead
+          of being left on a button that no longer exists. Not focusable by Tab,
+          only programmatically. */}
+      <h1
+        className="disp text-[24px] font-bold text-ink mb-1.5"
+        data-step-heading
+        tabIndex={-1}
+        style={{ outline: 'none' }}
+      >
+        {title}
+      </h1>
       <p className="text-[14px] text-ink-soft mb-6">{subtitle}</p>
 
       {children}
+
+      {/* Criterion 4: a failed save keeps the user here, keeps their answers,
+          and gives them something to press. aria-live so it is announced rather
+          than merely drawn. */}
+      {error && (
+        <div
+          className="mt-5 rounded-lg p-3 flex flex-wrap items-center gap-3"
+          style={{
+            background: 'color-mix(in srgb,var(--high) 10%,transparent)',
+            border: '1px solid color-mix(in srgb,var(--high) 35%,transparent)',
+          }}
+          role="alert"
+          aria-live="polite"
+          data-testid="wizard-save-error"
+        >
+          <div className="flex-1 min-w-[200px]">
+            <div className="text-[13px] font-semibold text-ink">{errorLabel}</div>
+            <div className="text-[12px] text-ink-soft mt-0.5">{errorHint}</div>
+          </div>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              data-testid="wizard-retry"
+              className="h-9 px-3.5 rounded-lg text-[12.5px] font-semibold shrink-0"
+              style={{ background: 'var(--accent-solid)', color: 'var(--fg-on-solid)' }}
+            >
+              {retryLabel}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mt-7 flex-wrap">
         {onBack && (
@@ -137,27 +191,68 @@ function str(answers: Record<string, unknown>, key: string, fallback = ''): stri
   return typeof v === 'string' ? v : fallback;
 }
 
-/** Save-then-navigate, shared by every step. */
+/**
+ * Save-then-navigate, shared by every step (#438 criterion 4).
+ *
+ * Three properties, and each one is a criterion rather than a preference:
+ *
+ *   • THE DATA IS PERSISTED BEFORE THE NEXT STEP RENDERS. No optimistic advance.
+ *     This is the one place ABSOLUTE RULE #10 (optimistic updates on critical
+ *     mutations) is deliberately overridden — do not "fix" it. An optimistic
+ *     tunnel that fails silently strands the user in an app they cannot enter,
+ *     because the guard is reading the server, not the client.
+ *   • THE TARGET COMES FROM THE SERVER. `state.steps` already has auto-skipped
+ *     steps removed, and the response's `current_step` is authoritative. Walking
+ *     the canonical five here would navigate straight onto a hidden step.
+ *   • A FAILURE KEEPS THE USER ON THE STEP WITH THEIR ANSWERS AND A RETRY. The
+ *     last attempt is held so `retry()` replays it verbatim; nothing is cleared,
+ *     nothing is re-typed.
+ */
 function useStepNav(step: OnboardingStepKey) {
   const navigate = useNavigate();
   const save = useSaveOnboardingStep();
-  const index = WIZARD_STEPS.findIndex((s) => s.key === step);
+  const { data: state } = useOnboardingState();
+  const lastAttempt = useRef<{ answers: Record<string, unknown>; direction: 1 | -1 } | null>(null);
 
-  const go = (answers: Record<string, unknown>, direction: 1 | -1) => {
-    const target = WIZARD_STEPS[Math.min(WIZARD_STEPS.length - 1, Math.max(0, index + direction))];
+  const visible: OnboardingStepKey[] = state?.steps?.length
+    ? state.steps
+    : WIZARD_STEPS.map((s) => s.key);
+  const index = Math.max(
+    0,
+    visible.findIndex((s) => s === step),
+  );
+
+  const run = (answers: Record<string, unknown>, direction: 1 | -1) => {
+    lastAttempt.current = { answers, direction };
+    const target = visible[Math.min(visible.length - 1, Math.max(0, index + direction))];
+
     save.mutate(
-      { step, answers, next: target.key },
+      { step, answers, next: target },
       {
-        onSuccess: () => navigate(stepPath(target.key)),
-        onError: () =>
-          toast.error(
-            "Impossible d'enregistrer cette étape. Vérifiez votre connexion et réessayez.",
-          ),
+        // The server's own cursor wins. It has already snapped the move onto the
+        // visible sequence, so this cannot land on a step the shell refuses to
+        // draw — which a client-side target can.
+        onSuccess: (saved) => navigate(stepPath(saved.current_step ?? target)),
+        // No toast. A toast is transient and carries no retry, and criterion 4
+        // asks for a control the user can actually press. StepShell renders it
+        // from `error` below.
       },
     );
   };
 
-  return { go, busy: save.isPending, index };
+  const retry = () => {
+    const attempt = lastAttempt.current;
+    if (attempt) run(attempt.answers, attempt.direction);
+  };
+
+  return {
+    go: run,
+    retry,
+    busy: save.isPending,
+    error: save.isError,
+    index,
+    total: visible.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +286,7 @@ export function OrganizationStep() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const stored = useStoredAnswers('organization');
-  const { go, busy } = useStepNav('organization');
+  const { go, busy, error, retry } = useStepNav('organization');
   const { data: suggestions } = useOnboardingSuggestions();
   const orgName = useAuthStore((s) => s.user?.org_name);
 
@@ -226,6 +321,11 @@ export function OrganizationStep() {
       nextLabel={tr('Continuer', 'Continue')}
       nextDisabled={!name.trim()}
       busy={busy}
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
       <Field label={tr("Nom de l'organisation", 'Organization name')} htmlFor="org-name">
         <input
@@ -340,7 +440,7 @@ export function ProfileStep() {
   const setLang = useUIStore((s) => s.setLang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const stored = useStoredAnswers('profile');
-  const { go, busy } = useStepNav('profile');
+  const { go, busy, error, retry } = useStepNav('profile');
   const user = useAuthStore((s) => s.user);
 
   const [fullName, setFullName] = useState('');
@@ -388,6 +488,11 @@ export function ProfileStep() {
       nextLabel={tr('Continuer', 'Continue')}
       nextDisabled={!fullName.trim()}
       busy={busy}
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
       <Field label={tr('Nom complet', 'Full name')} htmlFor="p-name">
         <input
@@ -488,7 +593,7 @@ export function GoalStep() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const stored = useStoredAnswers('goal');
-  const { go, busy } = useStepNav('goal');
+  const { go, busy, error, retry } = useStepNav('goal');
   const { data: suggestions } = useOnboardingSuggestions();
 
   const [goal, setGoal] = useState('');
@@ -506,6 +611,11 @@ export function GoalStep() {
       nextLabel={tr('Continuer', 'Continue')}
       nextDisabled={!goal}
       busy={busy}
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
       <div className="flex flex-col gap-2.5">
         {(suggestions?.goals ?? []).map((g) => {
@@ -549,7 +659,7 @@ export function GoalStep() {
 export function FrameworkStep() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
-  const { go, busy } = useStepNav('framework');
+  const { go, busy, error, retry } = useStepNav('framework');
   const { data: suggestions, isLoading } = useOnboardingSuggestions();
   const { data: catalogs } = useCatalogs();
   const importCatalog = useImportCatalogAsFramework();
@@ -592,8 +702,13 @@ export function FrameworkStep() {
       )}
       onBack={() => go({ imported }, -1)}
       onNext={() => go({ imported }, 1)}
-      nextLabel={imported.length ? tr('Continuer', 'Continue') : tr('Plus tard', 'Later')}
+      nextLabel={tr('Continuer', 'Continue')}
       busy={busy}
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
       {isLoading && (
         <div className="flex items-center gap-2 text-[13px] text-ink-soft">
@@ -664,7 +779,7 @@ export function FrameworkStep() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Team — skippable, with a copyable share link
+// 5. Team — with a copyable share link. NOT skippable (#438 criterion 1).
 // ---------------------------------------------------------------------------
 
 export function TeamStep() {
@@ -682,28 +797,31 @@ export function TeamStep() {
   const shareLink = `${window.location.origin}/register`;
 
   const finish = () => {
-    // Save the answers, then lift the guard. The invitations themselves are sent
+    // Save the answers, THEN lift the guard. The invitations themselves are sent
     // from Settings › Members, which owns roles and permissions — duplicating
     // that flow here would mean two places to keep correct.
+    //
+    // `onSuccess`, not `onSettled` (#438 criterion 4). Completing after a failed
+    // save would lift the guard on answers that were never stored, and the user
+    // would find an empty team list with no way back into the tunnel.
     save.mutate(
       { step: 'team', answers: { emails } },
       {
-        onSettled: () =>
+        onSuccess: () =>
           complete.mutate(undefined, {
-            onSuccess: (s) => navigate(s.landing || '/'),
-            onError: () =>
-              toast.error(
-                tr(
-                  'Impossible de terminer la configuration. Réessayez.',
-                  'Could not finish setup. Try again.',
-                ),
-              ),
+            // The tunnel ends on the Posture Reveal. That is the whole point of
+            // #438: five screens collected facts, and this is the screen that
+            // returns something computed in exchange. `landing` is where the
+            // user goes AFTER the reveal, from the reveal itself.
+            onSuccess: () => navigate('/posture'),
           }),
       },
     );
   };
 
   const busy = save.isPending || complete.isPending;
+  const error = save.isError || complete.isError;
+  const retry = () => finish();
 
   return (
     <StepShell
@@ -712,25 +830,23 @@ export function TeamStep() {
         'Facultatif — vous pouvez commencer seul et inviter plus tard.',
         'Optional — you can start alone and invite later.',
       )}
-      onBack={() => {
-        save.mutate({ step: 'team', answers: { emails }, next: 'framework' });
-        navigate(stepPath('framework'));
-      }}
+      // Persist BEFORE moving, backwards included (criterion 4). The previous
+      // version fired the save and navigated in the same tick, so a failed save
+      // lost the answers with nothing on screen to say so.
+      onBack={() =>
+        save.mutate(
+          { step: 'team', answers: { emails }, next: 'framework' },
+          { onSuccess: (saved) => navigate(stepPath(saved.current_step ?? 'framework')) },
+        )
+      }
       onNext={finish}
       nextLabel={tr('Terminer', 'Finish')}
       busy={busy}
-      secondary={
-        <button
-          type="button"
-          data-testid="wizard-skip"
-          onClick={finish}
-          disabled={busy}
-          className="h-11 px-4 rounded-[10px] text-[13.5px] font-semibold text-ink-soft"
-          style={{ background: 'transparent' }}
-        >
-          {tr('Passer cette étape', 'Skip this step')}
-        </button>
-      }
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
       <Field
         label={tr('Adresses e-mail', 'Email addresses')}

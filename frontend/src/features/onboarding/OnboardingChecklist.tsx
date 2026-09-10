@@ -15,7 +15,7 @@
 // after a single import (two steps read the same count).
 
 import { useNavigate } from 'react-router';
-import { Check, ArrowRight, Sparkles, Loader2, LifeBuoy } from 'lucide-react';
+import { Check, ArrowRight, Sparkles, Loader2, LifeBuoy, X } from 'lucide-react';
 
 import { useUIStore } from '../../store/uiStore';
 import { i18n, type ActivationStep } from '../../services/activationService';
@@ -26,6 +26,20 @@ export function OnboardingChecklist() {
   const navigate = useNavigate();
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
+
+  // #438 criterion 15: the user may close this panel.
+  //
+  // This is the POST-TUNNEL checklist, and it is the opposite surface from the
+  // tunnel, which has no dismiss at all (criterion 1). Do not collapse the two:
+  // the tunnel blocks the app until it is finished, this one is a nudge on a
+  // dashboard the user has already earned.
+  //
+  // The preference is per user per device and lives in the UI store. It is NOT
+  // sent to the server: activation state is a server fact, but "I do not want to
+  // look at this panel" is not activation state, and writing it there would make
+  // hiding a panel a mutation of the tenant's activation record.
+  const hidden = useUIStore((s) => s.checklistHidden);
+  const setHidden = useUIStore((s) => s.setChecklistHidden);
 
   const { data: state, isLoading, isError } = useActivationState();
 
@@ -58,9 +72,13 @@ export function OnboardingChecklist() {
   const total = state.steps.length;
   const complete = done === total;
 
-  // Everything done: the panel has served its purpose and disappears. No
-  // "dismiss" flag to store — completion is a server fact, so it stays hidden on
-  // every device without anything being persisted client-side.
+  // Closed by the user. Checked after the data hooks so the rules of hooks hold,
+  // and before the completion check so a closed panel costs no render either way.
+  if (hidden) return null;
+
+  // Everything done: the panel has served its purpose and disappears. Nothing is
+  // stored for THIS case — completion is a server fact, so it stays hidden on
+  // every device on its own.
   if (complete) return null;
 
   // The step to do next: the product's promise first if still open, else the
@@ -96,12 +114,22 @@ export function OnboardingChecklist() {
                 )}
           </div>
         </div>
-        <span
-          className="mono text-[12.5px] font-semibold text-ink-soft shrink-0"
-          aria-live="polite"
-        >
-          {done}/{total}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="mono text-[12.5px] font-semibold text-ink-soft" aria-live="polite">
+            {done}/{total}
+          </span>
+          <button
+            type="button"
+            onClick={() => setHidden(true)}
+            data-testid="checklist-close"
+            aria-label={tr('Masquer la liste de démarrage', 'Hide the getting-started list')}
+            title={tr('Masquer la liste de démarrage', 'Hide the getting-started list')}
+            className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-ink-soft"
+            style={{ background: 'transparent' }}
+          >
+            <X size={15} />
+          </button>
+        </div>
       </div>
 
       <div

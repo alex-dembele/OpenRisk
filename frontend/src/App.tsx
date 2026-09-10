@@ -242,6 +242,14 @@ const FrameworkStep = lazy(() =>
 const TeamStep = lazy(() =>
   import('./features/onboarding/wizard/steps').then((m) => ({ default: m.TeamStep })),
 );
+// #438 — the tunnel's terminal screen and the recognition screen for tenants
+// that were already configured. Lazy like every other route-level page.
+const PosturePage = lazy(() =>
+  import('./features/onboarding/PosturePage').then((m) => ({ default: m.PosturePage })),
+);
+const RecognitionPage = lazy(() =>
+  import('./features/onboarding/RecognitionPage').then((m) => ({ default: m.RecognitionPage })),
+);
 
 /**
  * COMPOSANT 1: PROTECTION DE ROUTE
@@ -545,6 +553,11 @@ function App() {
             <Route path="goal" element={<GoalStep />} />
             <Route path="framework" element={<FrameworkStep />} />
             <Route path="team" element={<TeamStep />} />
+            {/* #438 criterion 9 — the screen for a tenant that was already
+              configured before the tunnel existed. Inside the wizard shell so it
+              carries the same chrome, outside the step sequence because it is
+              not a step: it is what replaces the whole sequence. */}
+            <Route path="recognition" element={<RecognitionPage />} />
           </Route>
 
           {/* Routes Protégées (Layout Global) */}
@@ -560,6 +573,9 @@ function App() {
             }
           >
             <Route index element={<DashboardPage />} />
+            {/* #438 — the Posture Reveal. In the app shell, not the wizard's:
+              the tunnel ends here, but the user comes back to it. */}
+            <Route path="posture" element={<PosturePage />} />
             {/* #433 — the whole queue. The dashboard panel is a preview of the
               top of this list; ?page= makes each page a shareable address. */}
             <Route path="action-center" element={<ActionCenterPage />} />

@@ -48,7 +48,17 @@ export type OnboardingStepKey = 'organization' | 'profile' | 'goal' | 'framework
 
 export interface OnboardingState {
   current_step: OnboardingStepKey;
+  /**
+   * What the stepper renders: the steps THIS USER will actually see, with
+   * auto-skipped ones already removed server-side (#438 criterion 3). Render
+   * from this array and nothing else.
+   */
   steps: OnboardingStepKey[];
+  /**
+   * What was removed. Diagnostic only — drawing these would flash a step
+   * criterion 3 forbids.
+   */
+  skipped_steps: OnboardingStepKey[];
   step_index: number;
   completed: boolean;
   completed_at?: string | null;
@@ -100,6 +110,93 @@ export interface OnboardingSuggestions {
   goal?: string;
 }
 
+/* ---------------------------------------------------------------------------
+ * Posture Reveal (#438)
+ *
+ * Every field below is computed server-side from the tenant's OWN rows. There is
+ * deliberately no client-side fallback, no default and no placeholder anywhere in
+ * this block: criterion 7 forbids a sample value reaching the DOM, and a
+ * `?? 0` here would be exactly that.
+ * ------------------------------------------------------------------------- */
+
+/** Coverage of one risk by its mapped controls (ADR 0003). */
+export interface ResidualCoverage {
+  /** False when no APPLICABLE control is mapped — the residual then equals the
+   *  inherent score. An absent signal must never render as a good one. */
+  measured: boolean;
+  ratio: number;
+  effectiveness: number;
+  applicable: number;
+  total: number;
+}
+
+/** One residual, on the Score Engine's own scale and bands. */
+export interface Residual {
+  inherent: number;
+  value: number;
+  level: 'low' | 'medium' | 'high' | 'critical';
+  reduction: number;
+  coverage: ResidualCoverage;
+  formula_version: string;
+}
+
+export interface PostureRiskView {
+  id: string;
+  title: string;
+  inherent: number;
+  level: string;
+  residual: Residual;
+}
+
+export interface PostureSummary {
+  risks: { total: number; by_level: Record<string, number> };
+  controls: {
+    frameworks: number;
+    total: number;
+    implemented: number;
+    not_applicable: number;
+    in_progress: number;
+  };
+  /** null, NOT zero, when nothing is applicable. Zero would say "you have
+   *  covered nothing", which is a different and false statement. */
+  coverage_percent: number | null;
+  top_risks: PostureRiskView[];
+  residual_formula_version: string;
+  generated_at: string;
+  revealed_at?: string | null;
+  /** True only on the render that recorded the event, so the client celebrates
+   *  once without deciding anything itself. */
+  first_reveal: boolean;
+}
+
+export interface RecognitionCounts {
+  risks: number;
+  frameworks: number;
+  controls: number;
+  assets: number;
+  members: number;
+}
+
+export interface Recognition {
+  counts: RecognitionCounts;
+  /** The SERVER decides. A client that could choose would be a client that can
+   *  skip the tunnel. */
+  recognised: boolean;
+  skip_tunnel: boolean;
+}
+
+/** One statement from the starter catalogue (step 2 renders eight). */
+export interface StarterRisk {
+  key: string;
+  title_i18n: Record<string, string>;
+  description_i18n: Record<string, string>;
+  probability: number;
+  impact: number;
+  category: string;
+  tags?: string[];
+  scope: 'sector' | 'region' | 'generic';
+}
+
 export const activationService = {
   /** The checklist, exactly as the server computes it. */
   async getState(): Promise<ActivationState> {
@@ -148,6 +245,25 @@ export const activationService = {
     goal?: string;
   }): Promise<OnboardingSuggestions> {
     const { data } = await api.get<OnboardingSuggestions>('/onboarding/suggestions', { params });
+    return data;
+  },
+
+  /**
+   * The Posture Reveal.
+   *
+   * A 404 here is NOT a missing page: it is criterion 8's explicit refusal —
+   * the tenant has nothing to reveal, and the server recorded nothing and
+   * measured nothing rather than reporting a zeroed success. The caller must
+   * render an error state, never an empty posture.
+   */
+  async getPosture(): Promise<PostureSummary> {
+    const { data } = await api.get<PostureSummary>('/posture');
+    return data;
+  },
+
+  /** What the tenant already holds, for the population #234 backfilled. */
+  async getRecognition(): Promise<Recognition> {
+    const { data } = await api.get<Recognition>('/onboarding/recognition');
     return data;
   },
 };
