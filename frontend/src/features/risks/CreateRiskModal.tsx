@@ -405,9 +405,9 @@ export const CreateRiskModal = ({ isOpen, onClose, onCreated }: CreateRiskModalP
                       </label>
                       <div className="rounded-3xl border border-border bg-app p-3 min-h-[120px] overflow-y-auto">
                         {assetsLoading ? (
-                          <p className="text-xs text-ink-muted">Chargement des assets...</p>
+                          <p className="text-xs text-ink-muted">{t('common.loading')}</p>
                         ) : assets.length === 0 ? (
-                          <p className="text-xs text-ink-muted">Aucun asset disponible</p>
+                          <p className="text-xs text-ink-muted">{t('assets.noAssets')}</p>
                         ) : (
                           <div className="grid gap-2">
                             {assets.map((asset) => (
