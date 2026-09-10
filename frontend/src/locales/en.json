@@ -462,7 +462,8 @@
         "inherent": "Inherent risk",
         "residual": "Residual risk",
         "reduction": "Down by {value}"
-      }
+      },
+      "back": "Back"
     },
     "posture": {
       "title": "Your posture",
@@ -491,7 +492,8 @@
         "body": "Share this link. Roles are chosen in Settings › Members.",
         "copy": "Copy link",
         "copied": "Copied"
-      }
+      },
+      "continue": "Continue into OpenRisk"
     },
     "recognition": {
       "title": "What OpenRisk already knows about you",

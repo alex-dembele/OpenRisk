@@ -9,6 +9,7 @@
 
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
+import { useI18n } from '../../../hooks/useI18n';
 
 
 export function Field({
@@ -65,6 +66,8 @@ export function StepShell({
   errorHint?: string;
   retryLabel?: string;
 }) {
+  const { t } = useI18n();
+
   return (
     <form
       onSubmit={(e) => {
@@ -129,8 +132,8 @@ export function StepShell({
             className="h-11 px-4 rounded-[10px] text-[13.5px] font-semibold text-ink inline-flex items-center gap-1.5"
             style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-strong)' }}
           >
-            <ArrowLeft size={15} />
-            Retour
+            <ArrowLeft size={15} aria-hidden="true" />
+            {t('onboarding.tunnel.back')}
           </button>
         )}
         <button

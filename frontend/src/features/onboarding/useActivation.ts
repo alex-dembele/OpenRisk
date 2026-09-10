@@ -27,6 +27,7 @@ import {
   type AdoptStarterRisksResult,
 } from '../../services/activationService';
 import { confetti } from '../../shared/celebrate';
+import { useUIStore } from '../../store/uiStore';
 
 /** Shared key — invalidate it after any mutation that can complete a step. */
 export const ACTIVATION_QUERY_KEY = ['activation', 'state'];
@@ -236,8 +237,11 @@ export function useStarterRisks(enabled = true) {
  */
 export function useAdoptStarterRisks() {
   const qc = useQueryClient();
+  // The rows are written in the language the user is READING. Resolved here
+  // rather than at the call site so every caller gets it right by default.
+  const lang = useUIStore((s) => s.lang);
   return useMutation<AdoptStarterRisksResult, unknown, string[]>({
-    mutationFn: (keys: string[]) => activationService.adoptStarterRisks(keys),
+    mutationFn: (keys: string[]) => activationService.adoptStarterRisks(keys, lang),
     retry: false,
     onSuccess: () => {
       // New risks exist now: the checklist's first_risk row, the offer's

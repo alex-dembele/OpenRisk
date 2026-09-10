@@ -54,12 +54,23 @@ export function OnboardingGuard({ children }: { children: ReactNode }) {
 /**
  * Wraps the wizard itself: someone who has already finished has no business
  * being sent back through it (a bookmark, a back button, a stale tab).
+ *
+ * A completed user goes to the POSTURE REVEAL, not to `landing`.
+ *
+ * This used to send them to `data.landing` — the screen derived from their
+ * chosen goal — which quietly defeated the whole of #438: the last step calls
+ * `POST /onboarding/complete`, this wrapper saw `completed: true` on the very
+ * next render and redirected before the reveal could mount. Five screens
+ * collected facts and the user was dropped on a register, which is the exact
+ * activation cliff the issue exists to remove.
+ *
+ * `landing` is where they go FROM the reveal, and the reveal offers it.
  */
 export function OnboardingCompletedRedirect({ children }: { children: ReactNode }) {
   const { data, isLoading } = useOnboardingState();
 
   if (isLoading && !data) return <GuardPlaceholder />;
-  if (data?.completed) return <Navigate to={data.landing || '/'} replace />;
+  if (data?.completed) return <Navigate to="/posture" replace />;
   return <>{children}</>;
 }
 

@@ -7,6 +7,7 @@ package activation
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -109,7 +110,7 @@ type AdoptResult struct {
 //     writing two rows when three were asked for would leave the user counting.
 //   - ErrConflict — this tenant already adopted. Idempotence with a name, so the
 //     client can say "already done" instead of retrying into a duplicate.
-func (uc *StarterRisksUseCase) Adopt(ctx context.Context, tenantID, userID uuid.UUID, keys []string) (*AdoptResult, error) {
+func (uc *StarterRisksUseCase) Adopt(ctx context.Context, tenantID, userID uuid.UUID, keys []string, lang string) (*AdoptResult, error) {
 	if tenantID == uuid.Nil || userID == uuid.Nil {
 		return nil, domain.NewForbiddenError("a tenant and a user are required to adopt starter risks")
 	}
@@ -120,6 +121,8 @@ func (uc *StarterRisksUseCase) Adopt(ctx context.Context, tenantID, userID uuid.
 	if len(keys) != onboarding.StarterRiskPickCount {
 		return nil, domain.NewValidationError("exactly three starter risks must be selected")
 	}
+
+	writeLang := normaliseLang(lang)
 
 	// Resolve EVERY key before writing ANY row. A half-adopted register — two
 	// rows written, the third key rejected — is worse than a refusal, and the
@@ -137,14 +140,10 @@ func (uc *StarterRisksUseCase) Adopt(ctx context.Context, tenantID, userID uuid.
 			return nil, domain.NewValidationError("unknown starter risk: " + key)
 		}
 
-		// The language the row is written in follows the tenant's own answers,
-		// not a request header: the register is read by colleagues who never saw
-		// this screen.
-		lang := uc.language(ctx, tenantID, userID)
 		drafts = append(drafts, domain.StarterRiskDraft{
 			StarterKey:  statement.Key,
-			Title:       statement.Title(lang),
-			Description: statement.Description(lang),
+			Title:       statement.Title(writeLang),
+			Description: statement.Description(writeLang),
 			Probability: statement.Probability,
 			Impact:      statement.Impact,
 			Tags:        statement.Tags,
@@ -194,19 +193,26 @@ func (uc *StarterRisksUseCase) answers(ctx context.Context, tenantID, userID uui
 	return progress.Industry, progress.Country
 }
 
-// language picks the language the rows are written in. French by default: it is
-// the primary market's language and the catalogue's source language, so a
-// missing answer produces the statement as authored rather than a translation.
-func (uc *StarterRisksUseCase) language(ctx context.Context, tenantID, userID uuid.UUID) string {
-	if uc.repo == nil {
+// normaliseLang resolves the language the rows are WRITTEN in.
+//
+// This used to read a `language` answer off the `profile` step. #438 retired
+// that route, and nothing writes that answer any more — so every tenant, English
+// ones included, got French statements written into their risk register. Rows a
+// customer did not author, in a language their colleagues may not read, is the
+// precise failure ADR 0003 and this file's header set out to avoid.
+//
+// The language now comes from the caller, because it is a PREFERENCE and not
+// CONTENT: it selects which of two server-authored strings to store, and it
+// cannot introduce text of the client's own. Anything unrecognised falls back to
+// French — the catalogue's source language, so an unknown value stores the
+// statement as authored rather than an accidental half-translation.
+func normaliseLang(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "en":
+		return "en"
+	case "fr":
+		return "fr"
+	default:
 		return "fr"
 	}
-	progress, err := uc.repo.Get(ctx, tenantID, userID)
-	if err != nil || progress == nil {
-		return "fr"
-	}
-	if lang := stringAnswer(progress.StepAnswers(domain.OnboardingStepProfile), "language"); lang != "" {
-		return lang
-	}
-	return "fr"
 }

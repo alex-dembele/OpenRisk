@@ -462,7 +462,8 @@
         "inherent": "Risque inhérent",
         "residual": "Risque résiduel",
         "reduction": "Réduction de {value}"
-      }
+      },
+      "back": "Retour"
     },
     "posture": {
       "title": "Votre posture",
@@ -491,7 +492,8 @@
         "body": "Partagez ce lien. Les rôles se choisissent dans Paramètres › Membres.",
         "copy": "Copier le lien",
         "copied": "Copié"
-      }
+      },
+      "continue": "Continuer dans OpenRisk"
     },
     "recognition": {
       "title": "Ce qu'OpenRisk sait déjà de vous",
