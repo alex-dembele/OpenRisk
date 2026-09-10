@@ -24,7 +24,9 @@ import {
   useCompleteOnboarding,
   usePrefersReducedMotion,
   useSaveOnboardingStep,
+  useStarterRisks,
 } from '../useActivation';
+import { i18n } from '../../../services/activationService';
 
 // ---------------------------------------------------------------------------
 // The matrix
@@ -37,6 +39,31 @@ import {
 
 const PROBABILITY_BANDS = [0.1, 0.3, 0.5, 0.7, 0.9];
 const IMPACT_BANDS = [2, 4, 6, 8, 10];
+
+/**
+ * The risk these two steps are about.
+ *
+ * Both screens said "this risk" without ever naming one, on the step right after
+ * the user picked THREE — so they were scoring and covering an anonymous thing.
+ * The name comes from the selection stored in step 2 plus the catalogue the
+ * server already served; nothing is fetched that could record anything.
+ *
+ * Returns '' rather than a placeholder when the selection is not there yet: a
+ * made-up title on a screen about the user's own register is exactly what
+ * criterion 7 forbids.
+ */
+function useScoredRiskTitle(): string {
+  const lang = useUIStore((s) => s.lang);
+  const goalAnswers = useStoredAnswers('goal');
+  const { data: offer } = useStarterRisks();
+
+  return useMemo(() => {
+    const picked = goalAnswers.starter_risks;
+    if (!Array.isArray(picked) || picked.length === 0 || !offer) return '';
+    const first = offer.risks.find((r) => r.key === picked[0]);
+    return first ? i18n(first.title_i18n, lang) : '';
+  }, [goalAnswers, offer, lang]);
+}
 
 /** Score Engine bands, on the P×I×AC scale with AC unknown (so 0–10 here). */
 function bandOf(score: number): 'low' | 'medium' | 'high' | 'critical' {
@@ -68,6 +95,7 @@ export function ScoreStep() {
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const stored = useStoredAnswers('score');
   const { go, busy, error, retry } = useStepNav('score');
+  const riskTitle = useScoredRiskTitle();
 
   const [probability, setProbability] = useState(0.5);
   const [impact, setImpact] = useState(6);
@@ -93,7 +121,7 @@ export function ScoreStep() {
 
   return (
     <StepShell
-      title={tr('Évaluez ce risque', 'Score this risk')}
+      title={riskTitle || tr('Évaluez ce risque', 'Score this risk')}
       subtitle={tr(
         'Probabilité et impact. La matrice se met à jour pendant que vous bougez les curseurs — c’est le score que le moteur calculera.',
         'Likelihood and impact. The matrix updates as you move the sliders — this is the score the engine will compute.',
@@ -311,6 +339,7 @@ export function CoverStep() {
   // owns, and says plainly that the residual is computed on the next screen.
   // Nothing here is invented: the number comes from their own answers.
   const scored = useStoredAnswers('score');
+  const riskTitle = useScoredRiskTitle();
   const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
@@ -363,7 +392,7 @@ export function CoverStep() {
       )}
       retryLabel={tr('Réessayer', 'Try again')}
     >
-      <InherentCard inherent={inherent} tr={tr} />
+      <InherentCard inherent={inherent} title={riskTitle} tr={tr} />
 
       <label
         className="mt-5 flex items-start gap-3 cursor-pointer"
@@ -395,13 +424,22 @@ export function CoverStep() {
  * records the Aha. Showing a client-computed figure instead would be the
  * placeholder criterion 7 forbids, on the screen that leads into the reveal.
  */
-function InherentCard({ inherent, tr }: { inherent: number; tr: (fr: string, en: string) => string }) {
+function InherentCard({
+  inherent,
+  title,
+  tr,
+}: {
+  inherent: number;
+  title: string;
+  tr: (fr: string, en: string) => string;
+}) {
   return (
     <div
       className="rounded-xl p-5"
       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
       data-testid="cover-residual"
     >
+      {title && <div className="text-[13.5px] font-semibold text-ink mb-3">{title}</div>}
       <div className="flex items-end gap-5">
         <Figure label={tr('Inhérent', 'Inherent')} value={inherent} />
         <ShieldCheck size={18} aria-hidden="true" style={{ color: 'var(--fg-muted)', marginBottom: 6 }} />
