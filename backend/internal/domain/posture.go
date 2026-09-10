@@ -92,6 +92,50 @@ func (c RecognitionCounts) Any() bool {
 	return c.Risks > 0 || c.Frameworks > 0 || c.Controls > 0 || c.Assets > 0 || c.Members > 1
 }
 
+// ---------------------------------------------------------------------------
+// Starter risks (#438 step 2, D-012)
+// ---------------------------------------------------------------------------
+
+// StarterRiskDraft is one statement from the starter catalogue, ready to become
+// a real row in the tenant's register.
+//
+// It carries no free text from the client. The use case re-reads the canonical
+// statement from `pkg/onboarding` by key and fills this itself — a client that
+// could post arbitrary title and description would be an unvalidated write into
+// a customer's risk register, which for a GRC product is the kind of credibility
+// loss no support ticket recovers.
+type StarterRiskDraft struct {
+	// StarterKey is the catalogue key the statement came from. Persisted in
+	// ExternalID as "starter:<key>" so a second adoption is detectable and so a
+	// human reading the row can tell where it came from.
+	StarterKey  string
+	Title       string
+	Description string
+	Probability float64
+	Impact      float64
+	Tags        []string
+	CreatedBy   uuid.UUID
+}
+
+// StarterRiskWriter materialises adopted starter statements.
+//
+// Narrow and satisfied structurally, so `application/activation` never imports
+// `application/risk`. Both methods are tenant-scoped: these rows land in a
+// customer's register and criterion 10 covers this write path by name.
+type StarterRiskWriter interface {
+	// HasStarterRisks reports whether this tenant already adopted starter rows.
+	// It is what makes adoption idempotent — the tunnel is resumable, so a user
+	// who returns to step 2 must not double the register.
+	HasStarterRisks(ctx context.Context, tenantID uuid.UUID) (bool, error)
+	CreateStarterRisk(ctx context.Context, tenantID uuid.UUID, draft StarterRiskDraft) (*Risk, error)
+}
+
+// StarterExternalIDPrefix marks a risk row as written by the onboarding tunnel.
+// Paired with Source == SourceStarter, which is the indexed column PR 4 of #438
+// queries; the external id carries WHICH statement, the source carries THAT it
+// was a starter.
+const StarterExternalIDPrefix = "starter:"
+
 // PostureReader is the tenant-scoped read side of the Posture Reveal.
 //
 // EVERY method MUST filter on tenantID — #438 criterion 10, ABSOLUTE RULE #2.
@@ -132,6 +176,11 @@ type OnboardingStepData struct {
 	// HasFramework is true when the tenant already imported a framework.
 	HasFramework bool `json:"has_framework"`
 	// HasTeam is true when the tenant has more than its founding member.
+	//
+	// No longer skips anything: #438 moved the team step out of the tunnel and
+	// onto the Posture Reveal. Kept because the recognition screen and the reveal
+	// both read it, and because dropping it would silently change what a probe
+	// answers rather than what it is used for.
 	HasTeam bool `json:"has_team"`
 }
 
@@ -151,14 +200,25 @@ type OnboardingStepProbe interface {
 func (d OnboardingStepData) SkipsStep(step OnboardingStepKey) bool {
 	switch step {
 	case OnboardingStepOrganization:
-		return d.HasOrganizationProfile
-	case OnboardingStepProfile:
-		return d.HasUserProfile
+		// #438 merged the profile step into this one, so BOTH questions must
+		// already be answered to skip it. Testing only the organisation would
+		// skip a screen that still needs the person's name — and the checklist's
+		// `profile` row is ticked from here, so it would never tick.
+		return d.HasOrganizationProfile && d.HasUserProfile
 	case OnboardingStepFramework:
 		return d.HasFramework
-	case OnboardingStepTeam:
-		return d.HasTeam
 	default:
+		// `goal`, `score` and `cover` are never skippable, for two different
+		// reasons that both matter:
+		//
+		//   - `goal` is a preference, not a record. Nothing stored can prove what
+		//     a user wants to do next, and inferring it would silently choose
+		//     their landing page.
+		//   - `score` and `cover` are the two steps that RETURN something
+		//     computed. Skipping them because the tenant happens to hold a scored
+		//     risk would hand back exactly the cliff #438 exists to remove. A
+		//     tenant that already holds data does not reach the tunnel at all —
+		//     it is routed to the recognition screen (criterion 9).
 		return false
 	}
 }

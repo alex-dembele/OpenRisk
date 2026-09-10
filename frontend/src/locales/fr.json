@@ -485,6 +485,12 @@
         "heading": "Impossible de calculer votre posture",
         "body": "Aucune donnée n'a été enregistrée et aucune mesure n'a été prise. Réessayez.",
         "action": "Réessayer"
+      },
+      "invite": {
+        "heading": "Invitez votre équipe",
+        "body": "Partagez ce lien. Les rôles se choisissent dans Paramètres › Membres.",
+        "copy": "Copier le lien",
+        "copied": "Copié"
       }
     },
     "recognition": {

@@ -2876,7 +2876,12 @@ func main() {
 		onboardingUC,
 	).
 		WithPosture(appactivation.NewPostureUseCase(postureRepo, activationRepo, activationRecorder)).
-		WithRecognition(appactivation.NewRecognitionUseCase(postureRepo))
+		WithRecognition(appactivation.NewRecognitionUseCase(postureRepo)).
+		// Step 2's write path (#438, D-012). The writer is the RISK use case, not
+		// a second path to the repository: risk creation owns the lifecycle state
+		// machine, the ownership fallback and the synchronous banding, and a
+		// bypass would drift from all three silently.
+		WithStarterRisks(appactivation.NewStarterRisksUseCase(activationRepo, createRiskUseCase))
 	// Readable by any authenticated member: the get-started panel is not a
 	// privileged view, and gating it behind a permission would hide the product's
 	// own instructions from exactly the people who need them most.
@@ -2892,6 +2897,8 @@ func main() {
 	protected.Get("/onboarding/suggestions", activationHandler.GetOnboardingSuggestions)
 	protected.Post("/onboarding/complete", activationHandler.CompleteOnboarding)
 	protected.Get("/onboarding/recognition", activationHandler.GetRecognition)
+	protected.Get("/onboarding/starter-risks", activationHandler.GetStarterRisks)
+	protected.Post("/onboarding/starter-risks", activationHandler.AdoptStarterRisks)
 	protected.Put("/onboarding/steps/:step", activationHandler.SaveOnboardingStep)
 
 	// The Posture Reveal (#438). Outside the /onboarding group on purpose: it is

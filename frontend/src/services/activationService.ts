@@ -44,7 +44,15 @@ export interface ActivationState {
   time_to_aha_seconds?: number | null;
 }
 
-export type OnboardingStepKey = 'organization' | 'profile' | 'goal' | 'framework' | 'team';
+/**
+ * The five tunnel routes (#438).
+ *
+ * `profile` and `team` are RETIRED: the profile question merged into the
+ * organization step, and team invitations moved to the Posture Reveal, where the
+ * issue's design-system note puts them. They are not in this union, so the
+ * compiler stops any code from routing to a screen that no longer exists.
+ */
+export type OnboardingStepKey = 'organization' | 'goal' | 'framework' | 'score' | 'cover';
 
 export interface OnboardingState {
   current_step: OnboardingStepKey;
@@ -197,6 +205,23 @@ export interface StarterRisk {
   scope: 'sector' | 'region' | 'generic';
 }
 
+export interface StarterRiskOffer {
+  risks: StarterRisk[];
+  /** How many the user must pick. Sent by the server so the two can never
+   *  disagree about what "select three" means. */
+  pick: number;
+  industry?: string;
+  country?: string;
+  /** True when this tenant already has starter rows: the screen then shows the
+   *  selection as done instead of inviting an adoption the server would refuse. */
+  already_adopted: boolean;
+}
+
+export interface AdoptStarterRisksResult {
+  created: string[];
+  keys: string[];
+}
+
 export const activationService = {
   /** The checklist, exactly as the server computes it. */
   async getState(): Promise<ActivationState> {
@@ -264,6 +289,28 @@ export const activationService = {
   /** What the tenant already holds, for the population #234 backfilled. */
   async getRecognition(): Promise<Recognition> {
     const { data } = await api.get<Recognition>('/onboarding/recognition');
+    return data;
+  },
+
+  /** The eight statements step 2 renders, scoped to the stored sector/country. */
+  async getStarterRisks(): Promise<StarterRiskOffer> {
+    const { data } = await api.get<StarterRiskOffer>('/onboarding/starter-risks');
+    return data;
+  },
+
+  /**
+   * Adopt the three chosen statements.
+   *
+   * KEYS ONLY. There is deliberately no way to send a title or a description
+   * from here: the server re-reads the statement from its own catalogue, because
+   * a client that could post free text would be an unvalidated write into a
+   * customer's risk register.
+   *
+   * A 409 means this tenant already adopted — the tunnel is resumable, so that
+   * is an expected answer and not a failure to retry.
+   */
+  async adoptStarterRisks(keys: string[]): Promise<AdoptStarterRisksResult> {
+    const { data } = await api.post<AdoptStarterRisksResult>('/onboarding/starter-risks', { keys });
     return data;
   },
 };

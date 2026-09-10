@@ -343,20 +343,48 @@ type OnboardingStepKey string
 
 const (
 	OnboardingStepOrganization OnboardingStepKey = "organization"
-	OnboardingStepProfile      OnboardingStepKey = "profile"
 	OnboardingStepGoal         OnboardingStepKey = "goal"
 	OnboardingStepFramework    OnboardingStepKey = "framework"
-	OnboardingStepTeam         OnboardingStepKey = "team"
+	// OnboardingStepScore and OnboardingStepCover are the two steps #438 adds.
+	// They exist because the first three ASK and the last two SHOW: scoring one
+	// of the adopted risks against a live matrix, then watching the residual fall
+	// when a control is accepted. Without them the tunnel collects five screens
+	// of facts and returns nothing computed, which is the cliff the issue names.
+	OnboardingStepScore OnboardingStepKey = "score"
+	OnboardingStepCover OnboardingStepKey = "cover"
+
+	// OnboardingStepProfile and OnboardingStepTeam are RETIRED from the tunnel
+	// by #438 and are kept as constants on purpose.
+	//
+	// Stored `onboarding_progress` rows written before this change still carry
+	// their answers under these keys, and `OnboardingProgress.StepAnswers` reads
+	// by key. Deleting the constants would not delete the data; it would only
+	// make the data unreadable.
+	//
+	//   - `profile` is MERGED INTO the organization step, which now collects the
+	//     person as well as the company. `ActivationProfileCompleted` is still
+	//     recorded — from there — so the checklist row still ticks.
+	//   - `team` MOVES TO THE POSTURE REVEAL, where the issue's own design-system
+	//     note puts it ("TagInput — invitations on the reveal"). Inviting people
+	//     to look at nothing was the old ordering's mistake.
+	//
+	// Neither appears in OnboardingStepOrder, so ParseOnboardingStep rejects
+	// them: no client may resurrect a retired route.
+	OnboardingStepProfile OnboardingStepKey = "profile"
+	OnboardingStepTeam    OnboardingStepKey = "team"
 )
 
 // OnboardingStepOrder is the canonical wizard order. Back-navigation is allowed,
 // so this is a sequence, not a state machine with forbidden transitions.
+//
+// FIVE, still — #438 keeps the count so ProgressStepper keeps reading
+// "Étape N sur 5" for a user who skips nothing.
 var OnboardingStepOrder = []OnboardingStepKey{
 	OnboardingStepOrganization,
-	OnboardingStepProfile,
 	OnboardingStepGoal,
 	OnboardingStepFramework,
-	OnboardingStepTeam,
+	OnboardingStepScore,
+	OnboardingStepCover,
 }
 
 // ParseOnboardingStep validates a raw step key.
@@ -370,13 +398,19 @@ func ParseOnboardingStep(raw string) (OnboardingStepKey, error) {
 }
 
 // Index returns the 0-based position of a step in the wizard.
+//
+// Returns -1 for a step that is not in the sequence — a retired route
+// (`profile`, `team`) or a typo. It used to return 0, which silently made every
+// unknown key look like the FIRST step: after #438 retired two routes, a stored
+// cursor pointing at one of them would have reported "you are on organization"
+// and the wizard would have looked correct while being wrong.
 func (s OnboardingStepKey) Index() int {
 	for i, step := range OnboardingStepOrder {
 		if step == s {
 			return i
 		}
 	}
-	return 0
+	return -1
 }
 
 // OnboardingProgress is one user's resumable wizard state.

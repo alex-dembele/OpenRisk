@@ -230,17 +230,21 @@ const OnboardingWizard = lazy(() =>
 const OrganizationStep = lazy(() =>
   import('./features/onboarding/wizard/steps').then((m) => ({ default: m.OrganizationStep })),
 );
-const ProfileStep = lazy(() =>
-  import('./features/onboarding/wizard/steps').then((m) => ({ default: m.ProfileStep })),
-);
+
 const GoalStep = lazy(() =>
   import('./features/onboarding/wizard/steps').then((m) => ({ default: m.GoalStep })),
 );
 const FrameworkStep = lazy(() =>
   import('./features/onboarding/wizard/steps').then((m) => ({ default: m.FrameworkStep })),
 );
-const TeamStep = lazy(() =>
-  import('./features/onboarding/wizard/steps').then((m) => ({ default: m.TeamStep })),
+// #438 steps 4 and 5 — the two screens that return something computed. They
+// replace the retired `profile` and `team` routes: the profile question merged
+// into the organization step, and team invitations moved to the Posture Reveal.
+const ScoreStep = lazy(() =>
+  import('./features/onboarding/wizard/valueSteps').then((m) => ({ default: m.ScoreStep })),
+);
+const CoverStep = lazy(() =>
+  import('./features/onboarding/wizard/valueSteps').then((m) => ({ default: m.CoverStep })),
 );
 // #438 — the tunnel's terminal screen and the recognition screen for tenants
 // that were already configured. Lazy like every other route-level page.
@@ -549,10 +553,15 @@ function App() {
           >
             <Route index element={<Navigate to="/onboarding/organization" replace />} />
             <Route path="organization" element={<OrganizationStep />} />
-            <Route path="profile" element={<ProfileStep />} />
             <Route path="goal" element={<GoalStep />} />
             <Route path="framework" element={<FrameworkStep />} />
-            <Route path="team" element={<TeamStep />} />
+            <Route path="score" element={<ScoreStep />} />
+            <Route path="cover" element={<CoverStep />} />
+            {/* The retired routes redirect rather than 404: a bookmark or an
+              email link from before #438 must land somewhere sensible, and the
+              server snaps the cursor onto the visible sequence anyway. */}
+            <Route path="profile" element={<Navigate to="/onboarding/organization" replace />} />
+            <Route path="team" element={<Navigate to="/onboarding/cover" replace />} />
             {/* #438 criterion 9 — the screen for a tenant that was already
               configured before the tunnel existed. Inside the wizard shell so it
               carries the same chrome, outside the step sequence because it is

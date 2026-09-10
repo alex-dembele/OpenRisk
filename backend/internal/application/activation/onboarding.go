@@ -213,7 +213,11 @@ func (uc *OnboardingUseCase) SaveStep(ctx context.Context, tenantID, userID uuid
 			// every figure into it. Best-effort — never blocks the wizard.
 			_ = uc.orgCur.SetOrganizationCurrency(ctx, tenantID, stringAnswer(input.Answers, "currency"))
 		}
-	case domain.OnboardingStepProfile:
+
+		// #438 merged the retired `profile` step into this one. The person's own
+		// fields are NOT gated by CanEditOrganization: they are about the user,
+		// not the company, and a member invited into a configured organization
+		// must still be able to give their own name.
 		if uc.profiles != nil {
 			_ = uc.profiles.UpdateUserProfile(ctx, userID,
 				stringAnswer(input.Answers, "full_name"),
@@ -221,11 +225,16 @@ func (uc *OnboardingUseCase) SaveStep(ctx context.Context, tenantID, userID uuid
 				stringAnswer(input.Answers, "avatar_url"),
 			)
 		}
-		// The profile step is itself a checklist step — one event key, recorded
-		// here, so the panel ticks from a server fact like every other row.
-		uc.recorder.RecordFor(ctx, tenantID, userID, string(domain.ActivationProfileCompleted), map[string]interface{}{
-			"source": "onboarding_wizard",
-		})
+		// `profile` remains a CHECKLIST step with its own event key, and the
+		// bijection in domain.ValidateActivationSteps still holds. Only the
+		// wizard route is gone; the milestone is recorded from here so the panel
+		// ticks from a server fact exactly as before.
+		if stringAnswer(input.Answers, "full_name") != "" {
+			uc.recorder.RecordFor(ctx, tenantID, userID, string(domain.ActivationProfileCompleted), map[string]interface{}{
+				"source": "onboarding_wizard",
+				"step":   string(domain.OnboardingStepOrganization),
+			})
+		}
 	case domain.OnboardingStepGoal:
 		progress.Goal = stringAnswer(input.Answers, "goal")
 	}
@@ -263,7 +272,13 @@ func (uc *OnboardingUseCase) nextStep(current domain.OnboardingStepKey, next str
 		}
 	}
 
+	// A retired or unknown cursor has index -1, so +1 lands on the first step.
+	// That is the right answer: a user whose stored route no longer exists
+	// restarts the tunnel rather than being stranded on a screen nobody draws.
 	idx := current.Index() + 1
+	if idx < 0 {
+		idx = 0
+	}
 	if idx >= len(domain.OnboardingStepOrder) {
 		idx = len(domain.OnboardingStepOrder) - 1
 	}

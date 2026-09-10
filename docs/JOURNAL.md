@@ -128,6 +128,57 @@ Système de **rôles métiers** par-dessus le RBAC runtime existant. **Additionn
 - **Audit des boutons morts** : `docs/ui/dead-controls.md` recense **13 contrôles morts en production** (traités) + 4 dans du code inatteignable (fichiers supprimés) + 5 laissés avec leur raison. Notamment : point vert « Realtime » → **vrai indicateur de connexion** (`lib/connection.ts`, alimenté par les événements online/offline **et** l'issue de chaque appel axios ; un 4xx n'est pas une panne) · **micro supprimé** · « Voir toutes les notifications » **supprimé** (il ne faisait que fermer le panneau) · **« Supprimer l'organisation » implémenté** (c'était un `<button>` sans `onClick` — `DELETE /rbac/tenants/:id` + radiographie d'impact + logout) · Actualiser / Synchroniser / Matcher → états en vol visibles · funnel de l'Asset Universe → **vrai filtre par criticité** (masque aussi les arêtes pendantes).
 - **Tests** : `frontend/src/shared/datatable/__tests__/DataTable.test.tsx` (**25 tests, verts**) pour toute la logique pure ; `tests/e2e/datatable.spec.ts` + `tests/e2e/dead-controls.spec.ts` (**68 cas** listés par Playwright) pour les effets observables, dont l'obligatoire *« menu de la dernière ligne d'une table de 200 items entièrement visible »*. **Restes honnêtes — apurés le 2026-09-08 (#583)** : la chaîne Go est passée (`go build ./...` et `go vet ./...`, sortie 0, Go 1.25.12) et les E2E ont été **exécutés** contre un backend + frontend réels. Le compte de « 68 cas » était un compte de fichiers : la suite complète fait **270 cas** (chromium + Mobile Chrome) et sort à **197 passés · 62 échoués · 11 skippés · 0 flaky**. Le cas obligatoire — *menu de la dernière ligne d'une table de 200 items entièrement visible* — **passe** sur les deux projets, ainsi que les 25 tests unitaires `DataTable` (vérifiés : 25/25, dans une suite front de 516 tests tous verts). Les 62 échecs sont déposés en issues #587 → #596 ; ils ne sont **pas** corrigés ici. Reste ouvert : la suite n'a jamais tourné en CI — le job `E2E Tests` meurt au démarrage du backend faute de clé RSA (#587) — et 31 des 62 échecs sont le throttle d'authentification du produit lui-même (#588). Tant que ces deux-là tiennent, un E2E rouge ne se lit pas comme « le produit est cassé ».
 
+## Posture Reveal W1-05 (#438) — PR 5 : le tunnel est re-séquencé, les risques de démarrage deviennent de vraies lignes
+
+**Problème** — les PR 2 à 4 avaient rendu les cinq étapes EXISTANTES bloquantes, persistantes,
+sautables côté serveur et accessibles, mais ne les avaient pas reconstruites. Le tunnel
+collectait donc toujours cinq écrans de faits et ne rendait rien de calculé : la falaise que
+l'issue existe pour supprimer.
+
+- **Re-séquencement** (`internal/domain/activation.go`) — `OnboardingStepOrder` devient
+  organisation → objectif → référentiel → **score** → **cover**. Le compte reste à cinq, donc
+  le `ProgressStepper` continue d'afficher « Étape N sur 5 ».
+  - `profile` est **fusionné** dans l'étape organisation, qui collecte désormais la personne
+    en plus de l'entreprise. `profile` reste une **étape de checklist** avec sa clé d'événement :
+    seule sa route disparaît, et le jalon est enregistré depuis l'étape organisation — mais
+    **uniquement si un nom est donné**, sinon on cocherait « vous avez complété votre profil »
+    alors que personne n'a été nommé.
+  - `team` part sur la **Révélation de posture**, où la note « design system » de l'issue le
+    place. Demander à quelqu'un d'inviter des collègues à regarder rien était l'erreur de
+    l'ancien ordre.
+  - Les deux constantes **survivent** : des lignes `onboarding_progress` écrites avant ce
+    changement portent leurs réponses sous ces clés, et `StepAnswers` lit par clé. Les
+    supprimer n'aurait pas supprimé la donnée, seulement rendu la donnée illisible. Elles ne
+    sont plus dans l'ordre, donc `ParseOnboardingStep` les refuse : aucun client ne peut
+    ressusciter une route retirée.
+- **`Index()` renvoyait 0 pour une étape inconnue** — corrigé en -1. Avec deux routes retirées,
+  un curseur stocké pointant sur l'une d'elles se serait silencieusement fait passer pour la
+  **première** étape, et le wizard aurait eu l'air correct tout en étant faux.
+- **Chemin d'écriture des risques de démarrage** (`internal/application/activation/starter_risks.go`,
+  `internal/application/risk/starter_risks.go`). L'écriture la plus dangereuse de toute
+  l'issue, et le code est modelé autour de ça : **rien de ce que le client envoie ne devient du
+  contenu** — la requête porte des clés, l'énoncé est relu côté serveur dans `pkg/onboarding` ;
+  la provenance est doublée (`source = "starter"`, indexé, et `external_id = "starter:<clé>"`) ;
+  et l'adoption est **idempotente** par tenant (409 sur une seconde tentative), parce que le
+  tunnel est reprenable et qu'un utilisateur y reviendra.
+  L'adaptateur vit sur le use case **risque**, pas sur un second chemin vers le repository :
+  la création de risque possède la machine à états du cycle de vie, le repli de propriété et le
+  banding synchrone, et un contournement aurait dérivé des trois en silence.
+- **Étapes 4 et 5** (`frontend/src/features/onboarding/wizard/valueSteps.tsx`) — la matrice 5×5
+  s'allume pendant que les curseurs bougent (`<table>` et non une soupe de `div` : ce SONT des
+  données tabulaires), et la carte de couverture affiche l'inhérent puis le résiduel **calculés
+  par le serveur**. Le cas dégradé nommé par la DoD — pas de référentiel importé, donc pas de
+  résiduel calculable — a son propre écran plutôt qu'un zéro qui se lirait « aucun risque ».
+- **`stepNav.ts` / `stepPrimitives.tsx`** — séparés pour que le second n'exporte que des
+  composants. Un module qui exporte à la fois un composant et une constante casse le Fast
+  Refresh, et le frontend a un cliquet de lint sur cette règle.
+
+**Ce qui n'est PAS fait** — la suite E2E **n'a toujours pas été exécutée**. `TagInput`, que
+l'issue demande de réutiliser pour les invitations, **n'existe pas** dans `shared/` : les
+invitations utilisent la forme de l'ancienne étape équipe, et c'est consigné plutôt que
+contourné en silence. ADR 0003 reste `proposed`, donc `Risk.ResidualRisk` n'est jamais écrit.
+
+
 ## Posture Reveal W1-05 (#438) — PR 2 à 4 : le tunnel bloquant, le résiduel et l'écran de révélation
 
 **Problème** — le wizard se terminait sur un tableau de bord et une liste de sept corvées de

@@ -485,6 +485,12 @@
         "heading": "Your posture could not be computed",
         "body": "Nothing was recorded and nothing was measured. Try again.",
         "action": "Try again"
+      },
+      "invite": {
+        "heading": "Invite your team",
+        "body": "Share this link. Roles are chosen in Settings › Members.",
+        "copy": "Copy link",
+        "copied": "Copied"
       }
     },
     "recognition": {

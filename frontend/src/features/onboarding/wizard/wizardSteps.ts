@@ -19,10 +19,10 @@ import type { OnboardingStepKey } from '../../../services/activationService';
 /** Step labels. Copy only — never an order. */
 export const WIZARD_STEP_LABELS: Record<OnboardingStepKey, { fr: string; en: string }> = {
   organization: { fr: 'Organisation', en: 'Organization' },
-  profile: { fr: 'Profil', en: 'Profile' },
   goal: { fr: 'Objectif', en: 'Goal' },
   framework: { fr: 'Référentiel', en: 'Framework' },
-  team: { fr: 'Équipe', en: 'Team' },
+  score: { fr: 'Évaluation', en: 'Scoring' },
+  cover: { fr: 'Couverture', en: 'Coverage' },
 };
 
 /**
@@ -31,7 +31,7 @@ export const WIZARD_STEP_LABELS: Record<OnboardingStepKey, { fr: string; en: str
  * this user will never reach.
  */
 export const WIZARD_STEPS: { key: OnboardingStepKey; fr: string; en: string }[] = (
-  ['organization', 'profile', 'goal', 'framework', 'team'] as OnboardingStepKey[]
+  ['organization', 'goal', 'framework', 'score', 'cover'] as OnboardingStepKey[]
 ).map((key) => ({ key, ...WIZARD_STEP_LABELS[key] }));
 
 export function stepPath(step: OnboardingStepKey): string {

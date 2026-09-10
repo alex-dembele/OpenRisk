@@ -30,6 +30,7 @@ type ActivationHandler struct {
 	// answer 503 rather than an empty posture — see GetPosture.
 	posture     *appactivation.PostureUseCase
 	recognition *appactivation.RecognitionUseCase
+	starter     *appactivation.StarterRisksUseCase
 }
 
 // NewActivationHandler wires the handler.
@@ -51,6 +52,69 @@ func (h *ActivationHandler) WithPosture(uc *appactivation.PostureUseCase) *Activ
 func (h *ActivationHandler) WithRecognition(uc *appactivation.RecognitionUseCase) *ActivationHandler {
 	h.recognition = uc
 	return h
+}
+
+// WithStarterRisks attaches the starter catalogue use case (#438 step 2).
+func (h *ActivationHandler) WithStarterRisks(uc *appactivation.StarterRisksUseCase) *ActivationHandler {
+	h.starter = uc
+	return h
+}
+
+// GetStarterRisks GET /onboarding/starter-risks
+//
+// The eight statements step 2 renders, scoped to the sector and country the user
+// gave in step 1. Never empty: asking someone to pick three of nothing is a
+// broken screen, so the catalogue falls back rather than returning 404.
+func (h *ActivationHandler) GetStarterRisks(c *fiber.Ctx) error {
+	tenantID, userID, ok := h.identity(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+	if h.starter == nil {
+		return c.Status(fiber.StatusServiceUnavailable).
+			JSON(fiber.Map{"error": "Starter risks are not available on this deployment"})
+	}
+
+	offer, err := h.starter.List(c.UserContext(), tenantID, userID)
+	if err != nil {
+		return writeAppError(c, err)
+	}
+	return c.JSON(offer)
+}
+
+type adoptStarterRisksInput struct {
+	// Keys, and ONLY keys. There is deliberately no title or description field:
+	// the statement is re-read from the catalogue server-side, because a client
+	// that could post free text would be an unvalidated write into a customer's
+	// risk register.
+	Keys []string `json:"keys"`
+}
+
+// AdoptStarterRisks POST /onboarding/starter-risks
+//
+// Writes the three chosen statements as real risks, with `source = "starter"`
+// (D-012). Idempotent per tenant: a second adoption is a 409, not a duplicate —
+// the tunnel is resumable, so a user WILL come back to this step.
+func (h *ActivationHandler) AdoptStarterRisks(c *fiber.Ctx) error {
+	tenantID, userID, ok := h.identity(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+	if h.starter == nil {
+		return c.Status(fiber.StatusServiceUnavailable).
+			JSON(fiber.Map{"error": "Starter risks are not available on this deployment"})
+	}
+
+	var in adoptStarterRisksInput
+	if err := c.BodyParser(&in); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	result, err := h.starter.Adopt(c.UserContext(), tenantID, userID, in.Keys)
+	if err != nil {
+		return writeAppError(c, err)
+	}
+	return c.Status(fiber.StatusCreated).JSON(result)
 }
 
 // GetPosture GET /posture
