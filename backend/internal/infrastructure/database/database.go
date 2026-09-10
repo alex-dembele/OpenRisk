@@ -7,6 +7,7 @@ package database
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -17,6 +18,46 @@ import (
 )
 
 var DB *gorm.DB
+
+// gormLogger builds the SQL logger.
+//
+// Two things it fixes, both of which made a HEALTHY backend look broken (#615):
+//
+//   - IgnoreRecordNotFoundError. A "record not found" is not a database error,
+//     it is an answer: the report worker polling an empty queue
+//     (repository.ClaimQueued) gets one every interval and handles it correctly,
+//     but GORM logged it, with a file and line, before the application ever saw
+//     it. An operator watching `docker compose logs -f` after ./install.sh saw a
+//     continuous stream of errors from an idle system.
+//
+//   - The level. logger.Info logs EVERY statement with its parameter values.
+//     That buries anything real — one boot emits hundreds of pg_catalog lines —
+//     and puts user and tenant values into a log the operator may ship anywhere,
+//     which CLAUDE.md rule 6 does not want. Development keeps the full trace,
+//     because that is where you read SQL; production keeps warnings, slow
+//     queries and real errors.
+//
+// SlowThreshold is stated rather than left to GORM's implicit default, so the
+// number is a decision someone can argue with.
+func gormLogger() logger.Interface { return gormLoggerTo(os.Stdout) }
+
+// gormLoggerTo is gormLogger with the destination injected, so the behaviour
+// above can be asserted instead of described.
+func gormLoggerTo(w io.Writer) logger.Interface {
+	level := logger.Info
+	if os.Getenv("APP_ENV") == "production" {
+		level = logger.Warn
+	}
+	return logger.New(
+		log.New(w, "", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  level,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)
+}
 
 func Connect() {
 	// Build DSN from environment variables with sensible defaults
@@ -53,7 +94,7 @@ func Connect() {
 
 	var err error
 	DB, err = gorm.Open(postgres.Open(databaseURL), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: gormLogger(),
 		// TranslateError lets repositories detect constraint violations via
 		// sentinel errors (e.g. errors.Is(err, gorm.ErrDuplicatedKey))
 		// instead of parsing driver-specific error codes.
