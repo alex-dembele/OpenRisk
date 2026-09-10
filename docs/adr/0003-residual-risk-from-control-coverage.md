@@ -1,8 +1,9 @@
 # 0003 — Residual risk is derived from control coverage, additively
 
-Status: proposed — the approach is decided, the **constants need your sign-off**
+Status: **accepted**
 Proposed: 2026-09-10, on #438 (W1-05, PR 2)
-Decided by: D-013 (`docs/DECISIONS.md`), Option A
+Accepted: 2026-09-10 by the owner — D-042 (`docs/DECISIONS.md`)
+Decided by: D-013 (`docs/DECISIONS.md`), Option A — approach; D-042 — constants
 Implemented by: #438
 
 ## Context
@@ -114,12 +115,13 @@ stored `residual-v1` figure is never silently reinterpreted under v2 rules.
 
 ## Consequences
 
-* **Reversible only until the first write.** D-013 says it and it is the reason
-  this ADR is `proposed`: once tenant rows carry `Risk.ResidualRisk`, changing
-  `MaxEffectiveness` or a credit weight silently restates their history. **#438's
-  PR 2 computes and returns the residual but does NOT persist it to
-  `Risk.ResidualRisk` until this ADR is accepted.** The reveal reads a computed
-  value; nothing is stored.
+* **Irreversible from the first write.** D-013 made this reversible only while
+  nothing persisted; D-042 accepted the constants on 2026-09-10, so
+  `Risk.ResidualRisk` may now be written — and from the first stored row,
+  changing `MaxEffectiveness` or any credit weight silently restates tenant
+  history. A later formula takes a NEW version: `ResidualFormulaVersion` is
+  stamped on every result and must be persisted alongside any stored value, so a
+  `residual-v1` figure is never reinterpreted under `residual-v2` rules.
 * Evidence becomes load-bearing. `implemented` without evidence earning 0.70 will
   visibly cost tenants points, which is the intended teaching and will also be
   the first thing someone asks about. It is worth saying plainly in the UI copy

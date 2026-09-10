@@ -8,7 +8,13 @@ package scoring
 import "math"
 
 // ---------------------------------------------------------------------------
-// Residual risk from control coverage — ADR 0003, decided by D-013.
+// Residual risk from control coverage — ADR 0003 (accepted), approach decided by
+// D-013, constants accepted by D-042.
+//
+// THE FIVE NUMBERS BELOW ARE NOW LOAD-BEARING. From the first row persisted to
+// Risk.ResidualRisk, changing MaxEffectiveness or any credit weight silently
+// restates that tenant's history. A different formula takes a NEW
+// ResidualFormulaVersion; it does not edit these.
 //
 // ADDITIVE, like SmartScore. `Risk.Score` and the P×I×AC engine above are frozen
 // and appear nowhere in this file's output path: this computes how much of an

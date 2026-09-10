@@ -33,6 +33,45 @@ operator who meant to supply their own finds out immediately.
 
 ## Resolved
 
+### D-042 — ADR 0003's residual constants are accepted as written · decided 2026-09-10
+**Decided (owner)** — the credit table and both scaling constants stand:
+`implemented` with evidence **1.00**, `implemented` without **0.70**,
+`in_progress` **0.30**, `not_implemented` **0**, `not_applicable` **excluded from
+numerator and denominator**; `effectiveness = 0.80 × coverage`;
+`residual = inherent × (1 − effectiveness)`.
+
+ADR 0003 moves to `accepted` and `Risk.ResidualRisk` may be written.
+
+**Rationale (owner)** — matches the recommendation. It is the only table
+currently defensible without inventing data: nothing in the framework catalogues
+carries a per-control weight or importance, so any finer weighting would be
+authored rather than sourced, which RULE #12 forbids. The two numbers that carry
+a product judgement rather than a technical one were weighed and kept:
+
+- **0.80** is a FLOOR ON THE RESIDUAL, not a cap on ambition. A fully covered
+  risk keeps 20% of its inherent exposure, because a product that lets a control
+  set drive a risk to zero teaches its users that paperwork eliminates risk.
+- **0.70** for an unevidenced `implemented` will visibly cost tenants points and
+  will be the first thing a customer asks about. That is the intended teaching:
+  an auditor discounts a control that is claimed but not proven, and so does the
+  product. Worth saying plainly in the UI copy rather than letting them discover
+  it.
+
+**Consequence** — **IRREVERSIBLE FROM THE FIRST WRITE.** D-013 made this
+reversible only while nothing persisted; once tenant rows carry a residual,
+changing any of these five numbers silently restates their history. A later
+formula therefore takes a NEW version — `ResidualFormulaVersion` is stamped on
+every computed result and must be persisted alongside any stored value, so a
+`residual-v1` figure is never reinterpreted under `residual-v2` rules
+(`pkg/scoring/residual.go`).
+
+**Process note, recorded against myself** — CLAUDE.md says agents escalate by
+appending to THIS FILE. This decision was flagged only in #438's issue comments
+and PR bodies for four PRs, so `/decide` would have shown an empty register while
+the one thing blocking persistence sat elsewhere. Escalation means writing here.
+
+**Unblocked** — #438: ADR 0003 → `accepted`, and the reveal's write path.
+
 ### D-040 — what a self-hosted instance gets · decided 2026-09-09
 **Decided (owner)** — "Si une personne veut héberger lui-même tout sera gratuit
 sauf ce qui nécessite un appel API que j'ai configuré, un peu comme avec l'IA —
