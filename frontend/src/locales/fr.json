@@ -462,7 +462,8 @@
         "inherent": "Risque inhérent",
         "residual": "Risque résiduel",
         "reduction": "Réduction de {value}"
-      }
+      },
+      "back": "Retour"
     },
     "posture": {
       "title": "Votre posture",

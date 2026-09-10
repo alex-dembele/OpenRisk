@@ -462,7 +462,8 @@
         "inherent": "Inherent risk",
         "residual": "Residual risk",
         "reduction": "Down by {value}"
-      }
+      },
+      "back": "Back"
     },
     "posture": {
       "title": "Your posture",
