@@ -111,6 +111,25 @@ export default function TopologyView() {
   const nodes = useMemo(() => data?.nodes ?? [], [data]);
   const edges = useMemo(() => data?.edges ?? [], [data]);
 
+  // How many assets survive the zone and criticality filters.
+  //
+  // The header used to report data.nodes.length unconditionally, so unticking
+  // CRITICAL removed nodes from the canvas while the count kept claiming the
+  // whole estate. A count that ignores the filter beside a graph that obeys it
+  // is a screen telling the user two different things at once.
+  //
+  // Mirrors the predicate the layout effect uses; if one changes the other must.
+  const visibleCount = useMemo(
+    () =>
+      nodes.filter(
+        (n) =>
+          (!zoneFilter || n.zone === zoneFilter) &&
+          critFilter.has((n.criticality ?? 'LOW') as string),
+      ).length,
+    [nodes, zoneFilter, critFilter],
+  );
+  const filtered = visibleCount !== nodes.length;
+
   // The highlighted chain: origin + everything impacted + everything reachable.
   const highlighted = useMemo(() => {
     if (!chain) return null;
@@ -403,7 +422,13 @@ export default function TopologyView() {
     <PageFrame wide>
       <PageHeader
         title="Topologie de la surface d'attaque"
-        count={data ? `${data.nodes?.length ?? 0} actifs · ${data.edges?.length ?? 0} liens` : null}
+        count={
+          data
+            ? filtered
+              ? `${visibleCount} / ${nodes.length} actifs`
+              : `${nodes.length} actifs · ${edges.length} liens`
+            : null
+        }
         actions={
           <>
             <Btn label="SVG" icon={Download} onClick={() => void doExport('svg')} />
@@ -482,6 +507,7 @@ export default function TopologyView() {
         {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).map((c) => (
           <Chip
             key={c}
+            testId={`universe-filter-${c.toLowerCase()}`}
             label={CRIT_LABEL[c]}
             color={critColor[c.toLowerCase() as Criticality]}
             active={critFilter.has(c)}

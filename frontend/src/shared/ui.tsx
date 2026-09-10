@@ -165,15 +165,21 @@ export function Chip({
   active,
   onClick,
   color,
+  testId,
 }: {
   label: string;
   active?: boolean;
   onClick?: () => void;
   color?: string;
+  /** Optional hook for the E2E gates. A filter nobody can address from a test
+   *  is a filter whose behaviour nothing protects. */
+  testId?: string;
 }) {
   return (
     <button
       onClick={onClick}
+      data-testid={testId}
+      aria-pressed={active}
       className="h-(--control-h-sm) px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition-colors duration-fast ease-out"
       style={{
         border: `1px solid ${active ? 'transparent' : 'var(--border)'}`,
