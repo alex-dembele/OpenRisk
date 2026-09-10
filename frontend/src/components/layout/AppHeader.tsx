@@ -415,7 +415,17 @@ function ConnectionDot({ lang }: { lang: LocaleCode }) {
       offline: { color: 'var(--fg-muted)', label: ['Hors ligne', 'Offline'], pulse: false },
     };
   let m = meta[status.state];
-  let state: string = status.state;
+  // `live` is the realtime stream's own state, reported SEPARATELY from the
+  // connection state below. It used to overwrite `data-state`, which meant the
+  // attribute never read "online" while the API was reachable — it always
+  // carried a live-* value instead. That silently broke the contract
+  // tests/e2e/dead-controls.spec.ts reads ("the status dot reports the REAL
+  // connection"), and conflated two questions a user asks separately: can the
+  // app reach the server, and are updates arriving by themselves.
+  //
+  // The colour and the label still combine both, because one dot is the right
+  // amount of chrome. Only the machine-readable attributes are split.
+  let liveState: string = 'none';
 
   if (status.state === 'online') {
     switch (live.state) {
@@ -425,7 +435,7 @@ function ConnectionDot({ lang }: { lang: LocaleCode }) {
           label: ['Mises à jour en direct', 'Live updates on'],
           pulse: true,
         };
-        state = 'live';
+        liveState = 'live';
         break;
       case 'RECONNECTING':
       case 'INITIALIZING':
@@ -434,7 +444,7 @@ function ConnectionDot({ lang }: { lang: LocaleCode }) {
           label: ['Reconnexion au flux…', 'Reconnecting to the live stream…'],
           pulse: false,
         };
-        state = 'live-reconnecting';
+        liveState = 'live-reconnecting';
         break;
       case 'RESYNCING':
         m = {
@@ -442,7 +452,7 @@ function ConnectionDot({ lang }: { lang: LocaleCode }) {
           label: ['Resynchronisation en cours', 'Resynchronising'],
           pulse: false,
         };
-        state = 'live-resyncing';
+        liveState = 'live-resyncing';
         break;
       case 'FORBIDDEN':
         // Said plainly rather than shown as a fault: nothing is broken, this
@@ -455,7 +465,7 @@ function ConnectionDot({ lang }: { lang: LocaleCode }) {
           ],
           pulse: false,
         };
-        state = 'live-forbidden';
+        liveState = 'live-forbidden';
         break;
       case 'ERROR':
       case 'DISCONNECTED':
@@ -467,7 +477,7 @@ function ConnectionDot({ lang }: { lang: LocaleCode }) {
           ],
           pulse: false,
         };
-        state = 'live-off';
+        liveState = 'live-off';
         break;
     }
   }
@@ -478,7 +488,8 @@ function ConnectionDot({ lang }: { lang: LocaleCode }) {
       className="flex items-center px-2"
       title={label}
       data-testid="connection-status"
-      data-state={state}
+      data-state={status.state}
+      data-live={liveState}
     >
       <span
         className="w-[7px] h-[7px] rounded-full"
