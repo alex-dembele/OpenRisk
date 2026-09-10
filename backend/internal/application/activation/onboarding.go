@@ -90,18 +90,43 @@ func (uc *OnboardingUseCase) WithStepProbe(p domain.OnboardingStepProbe) *Onboar
 	return uc
 }
 
-// stepData resolves the auto-skip decisions once. A probe failure degrades to
-// "skip nothing": a wizard that shows a redundant step is a minor annoyance, and
-// one that hides a step whose data does NOT exist strands the user on a tunnel
-// they cannot complete.
-func (uc *OnboardingUseCase) stepData(ctx context.Context, tenantID, userID uuid.UUID) domain.OnboardingStepData {
+// stepData returns the auto-skip decision for a progress row, RESOLVING IT ONCE
+// and freezing it on the row (#438 criterion 2).
+//
+// Freezing is not an optimisation, it is a correctness requirement. The probe
+// reads live data, so a per-request decision meant that the instant a user saved
+// the organization step, that step's data existed and the step disappeared from
+// their tunnel — making it impossible to go back and fix a typo in the answer
+// they had just given, on a wizard whose stated contract is that you can.
+// Auto-skip is about data that existed BEFORE the tunnel started.
+//
+// A probe failure degrades to "skip nothing" and is NOT frozen, so the next
+// request can still resolve it: showing a redundant step costs a click, while
+// permanently hiding a step whose data does not exist strands the user on a
+// tunnel they cannot complete.
+func (uc *OnboardingUseCase) stepData(ctx context.Context, progress *domain.OnboardingProgress) domain.OnboardingStepData {
+	if progress == nil {
+		return domain.OnboardingStepData{}
+	}
+	if progress.SkipResolved() {
+		return progress.FrozenStepData()
+	}
 	if uc.probe == nil {
 		return domain.OnboardingStepData{}
 	}
-	data, err := uc.probe.OnboardingStepData(ctx, tenantID, userID)
+
+	data, err := uc.probe.OnboardingStepData(ctx, progress.TenantID, progress.UserID)
 	if err != nil {
 		return domain.OnboardingStepData{}
 	}
+
+	skipped := make([]domain.OnboardingStepKey, 0, len(domain.OnboardingStepOrder))
+	for _, step := range domain.OnboardingStepOrder {
+		if data.SkipsStep(step) {
+			skipped = append(skipped, step)
+		}
+	}
+	progress.SetSkippedSteps(skipped)
 	return data
 }
 
@@ -151,7 +176,11 @@ func (uc *OnboardingUseCase) GetState(ctx context.Context, tenantID, userID uuid
 
 	// Criterion 2: ONE call resolves the whole tunnel, auto-skip decisions
 	// included. No step may issue its own status call on mount.
-	return toWizardState(progress, uc.stepData(ctx, tenantID, userID)), nil
+	// Deliberately does NOT persist: a GET must not create a row for someone who
+	// merely looked. The decision is frozen by the first SaveStep, which is the
+	// first moment there is a row to freeze it onto — and, crucially, it is taken
+	// there BEFORE that step writes anything.
+	return toWizardState(progress, uc.stepData(ctx, progress)), nil
 }
 
 // SaveStepInput is one step's submission.
@@ -192,6 +221,13 @@ func (uc *OnboardingUseCase) SaveStep(ctx context.Context, tenantID, userID uuid
 	}
 	progress.TenantID = tenantID
 	progress.UserID = userID
+
+	// Resolve the auto-skip decision BEFORE this step writes anything. The probe
+	// reads live data, so taking it after the updaters below would freeze "the
+	// organization step is already answered" the instant the user answers it —
+	// and they could then never go back to fix a typo in that answer.
+	data := uc.stepData(ctx, progress)
+
 	progress.SetStepAnswers(input.Step, input.Answers)
 
 	// Promote the answers that drive the templates.
@@ -243,7 +279,6 @@ func (uc *OnboardingUseCase) SaveStep(ctx context.Context, tenantID, userID uuid
 	// advance one step, clamped at the last. Auto-skipped steps are stepped over
 	// in both directions — landing on a hidden step would strand the user on a
 	// screen the client is forbidden to render.
-	data := uc.stepData(ctx, tenantID, userID)
 	progress.CurrentStep = uc.nextStep(input.Step, input.Next, data)
 
 	if err := uc.repo.Save(ctx, progress); err != nil {
@@ -332,7 +367,7 @@ func (uc *OnboardingUseCase) Complete(ctx context.Context, tenantID, userID uuid
 	}
 	// Park the cursor on the last step this user actually saw, not on the
 	// catalogue's last step — which may be one they never walked.
-	visible := uc.stepData(ctx, tenantID, userID).VisibleSteps()
+	visible := uc.stepData(ctx, progress).VisibleSteps()
 	progress.CurrentStep = visible[len(visible)-1]
 	progress.TenantID = tenantID
 	progress.UserID = userID
@@ -340,7 +375,7 @@ func (uc *OnboardingUseCase) Complete(ctx context.Context, tenantID, userID uuid
 	if err := uc.repo.Save(ctx, progress); err != nil {
 		return nil, err
 	}
-	return toWizardState(progress, uc.stepData(ctx, tenantID, userID)), nil
+	return toWizardState(progress, uc.stepData(ctx, progress)), nil
 }
 
 // Suggestions is the payload of GET /onboarding/suggestions: the sector/goal

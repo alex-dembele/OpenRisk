@@ -7,6 +7,7 @@ package domain
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -387,6 +388,44 @@ var OnboardingStepOrder = []OnboardingStepKey{
 	OnboardingStepCover,
 }
 
+// SkipResolved reports whether the auto-skip decision has been taken for this
+// user. Taken once, at tunnel entry, and never revisited.
+func (p *OnboardingProgress) SkipResolved() bool { return p.SkippedSteps != "" }
+
+// SetSkippedSteps freezes the auto-skip decision. Storing "-" for "nothing is
+// skipped" keeps the empty string meaning "not yet resolved".
+func (p *OnboardingProgress) SetSkippedSteps(steps []OnboardingStepKey) {
+	if len(steps) == 0 {
+		p.SkippedSteps = "-"
+		return
+	}
+	parts := make([]string, 0, len(steps))
+	for _, s := range steps {
+		parts = append(parts, string(s))
+	}
+	p.SkippedSteps = strings.Join(parts, ",")
+}
+
+// FrozenStepData rebuilds the auto-skip decision from what was stored. Unknown
+// or retired keys are ignored rather than trusted: the stored string outlives
+// changes to the catalogue.
+func (p *OnboardingProgress) FrozenStepData() OnboardingStepData {
+	var data OnboardingStepData
+	if !p.SkipResolved() {
+		return data
+	}
+	for _, raw := range strings.Split(p.SkippedSteps, ",") {
+		switch OnboardingStepKey(strings.TrimSpace(raw)) {
+		case OnboardingStepOrganization:
+			data.HasOrganizationProfile = true
+			data.HasUserProfile = true
+		case OnboardingStepFramework:
+			data.HasFramework = true
+		}
+	}
+	return data
+}
+
 // ParseOnboardingStep validates a raw step key.
 func ParseOnboardingStep(raw string) (OnboardingStepKey, error) {
 	for _, s := range OnboardingStepOrder {
@@ -432,6 +471,22 @@ type OnboardingProgress struct {
 	// Answers holds every step's raw payload so a half-finished wizard can be
 	// resumed with the fields exactly as the user left them.
 	Answers JSONMap `gorm:"type:jsonb" json:"answers,omitempty"`
+
+	// SkippedSteps is the auto-skip decision, FROZEN AT TUNNEL ENTRY (#438
+	// criterion 2: "one GET /onboarding/state call on tunnel entry returns the
+	// full step map including auto-skip decisions").
+	//
+	// It must not be recomputed per request, and the reason is a bug this field
+	// exists to fix: the probe reads live data, so the moment a user SAVED the
+	// organization step, that step's data existed and the step vanished from the
+	// tunnel — making it impossible to go back and fix a typo in the answer they
+	// had just given. Auto-skip is about data that existed BEFORE the tunnel
+	// started, not about data the tunnel itself just wrote.
+	//
+	// Empty string = not yet resolved. A comma-separated list of step keys once
+	// it is; "-" means "resolved, and nothing is skipped", so the two states are
+	// distinguishable without a second nullable column.
+	SkippedSteps string `gorm:"type:varchar(255);not null;default:''" json:"-"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`

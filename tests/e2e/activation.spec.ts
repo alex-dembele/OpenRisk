@@ -315,8 +315,13 @@ test.describe('activation — signup to Aha', () => {
     const api = authed(ctx, newcomer.token);
 
     await api.put('/onboarding/steps/organization', {
-      answers: { name: 'Clinique du Littoral', industry: 'health', country: 'CM' },
-      next: 'profile',
+      answers: {
+        name: 'Clinique du Littoral',
+        industry: 'health',
+        country: 'CM',
+        full_name: 'Awa Newcomer',
+      },
+      next: 'goal',
     });
 
     // A brand-new browser context — nothing client-side carries over.
@@ -326,7 +331,7 @@ test.describe('activation — signup to Aha', () => {
 
     // The guard resumes at the stored step, not back at the start.
     await expect(page, 'a resumed wizard reopens where it was left').toHaveURL(
-      /\/onboarding\/profile/,
+      /\/onboarding\/goal/,
       { timeout: 15_000 },
     );
 
@@ -554,32 +559,37 @@ test.describe('posture reveal — the Aha moment (#438)', () => {
     expect(wizard.steps).toEqual(['organization', 'goal', 'framework', 'score', 'cover']);
     expect(wizard.skipped_steps).toEqual([]);
 
-    // Answering step 1 writes industry + size onto the Organization row AND the
-    // name onto the User row — both of which the auto-skip probe reads, because
-    // #438 merged the profile question into this step.
-    await api.put('/onboarding/steps/organization', {
-      answers: {
-        name: 'Banque Atlantique CM',
-        industry: 'banking',
-        size: '201-1000',
-        country: 'CM',
-        full_name: 'Awa Newcomer',
-        job_title: 'RSSI',
-      },
-      next: 'goal',
+    // The data must be seeded OUT OF BAND — through the compliance API, not
+    // through the tunnel. Auto-skip is about what the tenant held BEFORE the
+    // tunnel started; a step the tunnel itself just filled in must stay
+    // reachable, or the user can never go back to fix a typo in it. That
+    // property has its own test in
+    // internal/application/activation/autoskip_test.go.
+    const framework = await (
+      await api.post('/compliance/frameworks', {
+        name: 'COBAC R-2016/04',
+        version: '2016',
+        description: 'Pré-existant',
+      })
+    ).json();
+    const importRes = await api.post(`/compliance/frameworks/${framework.id}/import-catalog`, {
+      catalog_key: 'cobac',
     });
+    expect(importRes.status(), `the import should succeed: ${await importRes.text()}`).toBeLessThan(
+      300,
+    );
 
     wizard = await (await api.get('/onboarding/state')).json();
     expect(
       wizard.steps,
-      'a step whose data now exists must be absent from the stepper',
-    ).not.toContain('organization');
-    expect(wizard.skipped_steps, 'and must be reported as skipped').toContain('organization');
+      'a step whose data already existed must be absent from the stepper',
+    ).not.toContain('framework');
+    expect(wizard.skipped_steps, 'and must be reported as skipped').toContain('framework');
     expect(wizard.steps.length, 'the stepper count shown to this user shrinks with it').toBe(4);
     expect(
       wizard.current_step,
       'the cursor must never point at a step the client may not draw',
-    ).not.toBe('organization');
+    ).not.toBe('framework');
 
     await ctx.dispose();
   });

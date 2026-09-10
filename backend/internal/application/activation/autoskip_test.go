@@ -236,6 +236,100 @@ func TestWizard_StepIndexIsRelativeToVisibleSteps(t *testing.T) {
 	}
 }
 
+// THE BUG THIS FREEZE EXISTS TO FIX, pinned.
+//
+// The probe reads LIVE data. Before the decision was frozen, the instant a user
+// saved the organization step that step's data existed, so it vanished from
+// their tunnel — and they could never go back to fix a typo in the answer they
+// had just given, on a wizard whose stated contract is that you can.
+//
+// Auto-skip is about data that existed BEFORE the tunnel started.
+func TestWizard_AnsweringAStepDoesNotMakeItUnreachable(t *testing.T) {
+	repo := newFakeRepo()
+	tenant, user := uuid.New(), uuid.New()
+
+	// A probe that answers from the tenant's live state, exactly as the real one
+	// does: once the organization answers exist, it reports them.
+	live := &liveProbe{repo: repo, user: user}
+	uc := newWizard(repo).WithStepProbe(live)
+
+	state, err := uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
+		Step: domain.OnboardingStepOrganization,
+		Answers: domain.JSONMap{
+			"name": "Banque Atlantique CM", "industry": "banking", "size": "201-1000",
+			"full_name": "Awa Newcomer", "job_title": "RSSI",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SaveStep: %v", err)
+	}
+	if state.CurrentStep != string(domain.OnboardingStepGoal) {
+		t.Fatalf("cursor = %q, want goal", state.CurrentStep)
+	}
+
+	// The step the user JUST answered must still be reachable.
+	for _, s := range state.Steps {
+		if s == string(domain.OnboardingStepOrganization) {
+			goto reachable
+		}
+	}
+	t.Fatalf("the just-answered step vanished from the stepper: %v", state.Steps)
+
+reachable:
+	back, err := uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
+		Step:    domain.OnboardingStepGoal,
+		Answers: domain.JSONMap{"goal": "pass_audit"},
+		Next:    string(domain.OnboardingStepOrganization),
+	})
+	if err != nil {
+		t.Fatalf("back-navigation must be permitted: %v", err)
+	}
+	if back.CurrentStep != string(domain.OnboardingStepOrganization) {
+		t.Errorf("going back to fix a typo landed on %q, want organization", back.CurrentStep)
+	}
+}
+
+// A tenant that ALREADY held the data before entering still skips the step —
+// the freeze must not disable auto-skip, only pin when it is decided.
+func TestWizard_PreExistingDataStillSkips(t *testing.T) {
+	repo := newFakeRepo()
+	tenant, user := uuid.New(), uuid.New()
+	live := &liveProbe{repo: repo, user: user, preExisting: true}
+	uc := newWizard(repo).WithStepProbe(live)
+
+	state, err := uc.GetState(context.Background(), tenant, user)
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	for _, s := range state.Steps {
+		if s == string(domain.OnboardingStepOrganization) {
+			t.Error("a tenant that already had the data must not be asked again")
+		}
+	}
+}
+
+// liveProbe answers from the stored progress, the way the real repository probe
+// answers from the tenant's live rows.
+type liveProbe struct {
+	repo        *fakeRepo
+	user        uuid.UUID
+	preExisting bool
+}
+
+func (p *liveProbe) OnboardingStepData(_ context.Context, _, _ uuid.UUID) (domain.OnboardingStepData, error) {
+	if p.preExisting {
+		return domain.OnboardingStepData{HasOrganizationProfile: true, HasUserProfile: true}, nil
+	}
+	progress := p.repo.progress[p.user.String()]
+	if progress == nil {
+		return domain.OnboardingStepData{}, nil
+	}
+	answers := progress.StepAnswers(domain.OnboardingStepOrganization)
+	has := stringAnswer(answers, "industry") != "" && stringAnswer(answers, "size") != ""
+	name := stringAnswer(answers, "full_name") != ""
+	return domain.OnboardingStepData{HasOrganizationProfile: has, HasUserProfile: name}, nil
+}
+
 // A probe failure must show every step, not hide one whose data does not exist.
 // Showing a redundant step costs a click; hiding a needed one strands the user.
 func TestWizard_ProbeFailureShowsEveryStep(t *testing.T) {
