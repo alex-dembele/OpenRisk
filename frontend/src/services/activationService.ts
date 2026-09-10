@@ -308,9 +308,19 @@ export const activationService = {
    *
    * A 409 means this tenant already adopted — the tunnel is resumable, so that
    * is an expected answer and not a failure to retry.
+   *
+   * `lang` decides the language the rows are WRITTEN in. Getting it wrong writes
+   * statements a customer's colleagues may not read into their own register.
    */
-  async adoptStarterRisks(keys: string[]): Promise<AdoptStarterRisksResult> {
-    const { data } = await api.post<AdoptStarterRisksResult>('/onboarding/starter-risks', { keys });
+  async adoptStarterRisks(keys: string[], lang: Lang): Promise<AdoptStarterRisksResult> {
+    const { data } = await api.post<AdoptStarterRisksResult>('/onboarding/starter-risks', {
+      keys,
+      // Which of the two SERVER-AUTHORED strings to store. A preference, not
+      // content: it cannot introduce text of our own, and the server falls back
+      // to French on anything it does not recognise. Sent because the client is
+      // the only party that knows which language the person is reading.
+      lang,
+    });
     return data;
   },
 };

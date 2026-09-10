@@ -81,7 +81,7 @@ func TestAdoptStarterRisks_Success(t *testing.T) {
 	seedAnswers(repo, tenant, user, "banking", "CM")
 	keys := threeKeys(t)
 
-	got, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenant, user, keys)
+	got, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenant, user, keys, "fr")
 	if err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestAdoptStarterRisks_NotFound(t *testing.T) {
 	keys := threeKeys(t)
 	keys[2] = "starter_does_not_exist"
 
-	_, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenant, user, keys)
+	_, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenant, user, keys, "fr")
 	if err == nil || !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("error = %v, want ErrValidation", err)
 	}
@@ -150,7 +150,7 @@ func TestAdoptStarterRisks_Unauthorized(t *testing.T) {
 		"no user":   {tenant, uuid.Nil},
 		"neither":   {uuid.Nil, uuid.Nil},
 	} {
-		if _, err := uc.Adopt(context.Background(), call[0], call[1], keys); err == nil || !errors.Is(err, domain.ErrForbidden) {
+		if _, err := uc.Adopt(context.Background(), call[0], call[1], keys, "fr"); err == nil || !errors.Is(err, domain.ErrForbidden) {
 			t.Errorf("Adopt %s: error = %v, want ErrForbidden", name, err)
 		}
 		if _, err := uc.List(context.Background(), call[0], call[1]); err == nil || !errors.Is(err, domain.ErrForbidden) {
@@ -166,6 +166,62 @@ func TestAdoptStarterRisks_Unauthorized(t *testing.T) {
 // The properties that keep a customer's register clean
 // ---------------------------------------------------------------------------
 
+// THE BUG THIS ARGUMENT EXISTS TO FIX, pinned.
+//
+// The write language used to be read off the retired `profile` step's answers,
+// which nothing writes any more — so every tenant, English ones included, got
+// French statements written into their risk register. Rows a customer did not
+// author, in a language their colleagues may not read.
+func TestAdoptStarterRisks_WritesInTheRequestedLanguage(t *testing.T) {
+	for _, lang := range []string{"en", "fr"} {
+		repo, writer := newFakeRepo(), newFakeStarterWriter()
+		tenant, user := uuid.New(), uuid.New()
+		seedAnswers(repo, tenant, user, "banking", "CM")
+		keys := threeKeys(t)
+
+		if _, err := NewStarterRisksUseCase(repo, writer).Adopt(
+			context.Background(), tenant, user, keys, lang,
+		); err != nil {
+			t.Fatalf("%s: Adopt: %v", lang, err)
+		}
+
+		for i, draft := range writer.written[tenant] {
+			statement, _ := onboarding.StarterRiskByKey(keys[i])
+			if draft.Title != statement.Title(lang) {
+				t.Errorf("%s: title = %q, want %q", lang, draft.Title, statement.Title(lang))
+			}
+		}
+	}
+}
+
+// The language selects one of two SERVER-AUTHORED strings; it can never
+// introduce text of the client's own. An unrecognised value stores the statement
+// as authored rather than an accidental half-translation.
+func TestAdoptStarterRisks_UnknownLanguageFallsBackToFrench(t *testing.T) {
+	hostile := "en\u0000; --"
+	for _, lang := range []string{"", "de", "EN-GB", hostile} {
+		repo, writer := newFakeRepo(), newFakeStarterWriter()
+		tenant, user := uuid.New(), uuid.New()
+		seedAnswers(repo, tenant, user, "banking", "CM")
+		keys := threeKeys(t)
+
+		if _, err := NewStarterRisksUseCase(repo, writer).Adopt(
+			context.Background(), tenant, user, keys, lang,
+		); err != nil {
+			t.Fatalf("%q: Adopt: %v", lang, err)
+		}
+		statement, _ := onboarding.StarterRiskByKey(keys[0])
+		if got := writer.written[tenant][0].Title; got != statement.Title("fr") {
+			t.Errorf("%q: title = %q, want the French original", lang, got)
+		}
+	}
+
+	// Case and padding are tolerated: a client sending "EN" or " en " means en.
+	if got := normaliseLang(" EN "); got != "en" {
+		t.Errorf("normaliseLang with padding = %q, want en", got)
+	}
+}
+
 // The tunnel is resumable and back-navigable BY DESIGN, so a user will return to
 // step 2. Without this guard every return visit doubles the register.
 func TestAdoptStarterRisks_IsIdempotentPerTenant(t *testing.T) {
@@ -175,11 +231,11 @@ func TestAdoptStarterRisks_IsIdempotentPerTenant(t *testing.T) {
 	uc := NewStarterRisksUseCase(repo, writer)
 	keys := threeKeys(t)
 
-	if _, err := uc.Adopt(context.Background(), tenant, user, keys); err != nil {
+	if _, err := uc.Adopt(context.Background(), tenant, user, keys, "fr"); err != nil {
 		t.Fatalf("first adopt: %v", err)
 	}
 
-	_, err := uc.Adopt(context.Background(), tenant, user, keys)
+	_, err := uc.Adopt(context.Background(), tenant, user, keys, "fr")
 	if err == nil || !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("second adopt: error = %v, want ErrConflict", err)
 	}
@@ -196,7 +252,7 @@ func TestAdoptStarterRisks_NeverWritesToAnotherTenant(t *testing.T) {
 	tenantA, tenantB, user := uuid.New(), uuid.New(), uuid.New()
 	seedAnswers(repo, tenantA, user, "banking", "CM")
 
-	if _, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenantA, user, threeKeys(t)); err != nil {
+	if _, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenantA, user, threeKeys(t), "fr"); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
 	if len(writer.written[tenantB]) != 0 {
@@ -205,7 +261,7 @@ func TestAdoptStarterRisks_NeverWritesToAnotherTenant(t *testing.T) {
 
 	// And tenant B's own adoption is not blocked by tenant A's.
 	seedAnswers(repo, tenantB, user, "health", "FR")
-	if _, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenantB, user, threeKeys(t)); err != nil {
+	if _, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenantB, user, threeKeys(t), "fr"); err != nil {
 		t.Errorf("tenant B must be able to adopt independently: %v", err)
 	}
 }
@@ -231,14 +287,14 @@ func TestAdoptStarterRisks_RequiresExactlyThree(t *testing.T) {
 		"four":  eight[:4],
 		"eight": eight,
 	} {
-		if _, err := uc.Adopt(context.Background(), tenant, user, keys); err == nil || !errors.Is(err, domain.ErrValidation) {
+		if _, err := uc.Adopt(context.Background(), tenant, user, keys, "fr"); err == nil || !errors.Is(err, domain.ErrValidation) {
 			t.Errorf("%s: error = %v, want ErrValidation", name, err)
 		}
 	}
 
 	// A duplicate is three keys but not three statements.
 	dup := []string{eight[0], eight[0], eight[1]}
-	if _, err := uc.Adopt(context.Background(), tenant, user, dup); err == nil || !errors.Is(err, domain.ErrValidation) {
+	if _, err := uc.Adopt(context.Background(), tenant, user, dup, "fr"); err == nil || !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("a repeated key must be rejected, got %v", err)
 	}
 	if len(writer.written[tenant]) != 0 {
@@ -254,7 +310,7 @@ func TestAdoptStarterRisks_SurfacesAPartialFailure(t *testing.T) {
 	tenant, user := uuid.New(), uuid.New()
 	seedAnswers(repo, tenant, user, "banking", "CM")
 
-	got, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenant, user, threeKeys(t))
+	got, err := NewStarterRisksUseCase(repo, writer).Adopt(context.Background(), tenant, user, threeKeys(t), "fr")
 	if err == nil {
 		t.Fatal("a failing writer must surface")
 	}
@@ -316,7 +372,7 @@ func TestListStarterRisks_ReportsAnExistingAdoption(t *testing.T) {
 	seedAnswers(repo, tenant, user, "banking", "CM")
 	uc := NewStarterRisksUseCase(repo, writer)
 
-	if _, err := uc.Adopt(context.Background(), tenant, user, threeKeys(t)); err != nil {
+	if _, err := uc.Adopt(context.Background(), tenant, user, threeKeys(t), "fr"); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
 	offer, err := uc.List(context.Background(), tenant, user)

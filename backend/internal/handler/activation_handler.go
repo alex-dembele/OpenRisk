@@ -88,6 +88,11 @@ type adoptStarterRisksInput struct {
 	// that could post free text would be an unvalidated write into a customer's
 	// risk register.
 	Keys []string `json:"keys"`
+	// Lang selects WHICH of the two server-authored strings is stored. It is a
+	// preference, not content — it cannot introduce text of the client's own, and
+	// anything unrecognised falls back to French. Sent by the client because it
+	// is the only party that knows which language the person is reading.
+	Lang string `json:"lang"`
 }
 
 // AdoptStarterRisks POST /onboarding/starter-risks
@@ -110,7 +115,7 @@ func (h *ActivationHandler) AdoptStarterRisks(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	result, err := h.starter.Adopt(c.UserContext(), tenantID, userID, in.Keys)
+	result, err := h.starter.Adopt(c.UserContext(), tenantID, userID, in.Keys, in.Lang)
 	if err != nil {
 		return writeAppError(c, err)
 	}
