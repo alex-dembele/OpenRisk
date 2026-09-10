@@ -46,8 +46,16 @@ type ProfileUpdater interface {
 
 // WizardState is the payload of GET /onboarding/state.
 type WizardState struct {
-	CurrentStep string         `json:"current_step"`
-	Steps       []string       `json:"steps"`
+	CurrentStep string `json:"current_step"`
+	// Steps is what the ProgressStepper renders: the steps THIS USER will
+	// actually see, with auto-skipped ones removed (#438 criterion 3). It is not
+	// the canonical catalogue — a user who skips two steps must read
+	// "step 2 of 3", not "step 2 of 5" with two rows that never arrive.
+	Steps []string `json:"steps"`
+	// SkippedSteps is what was removed and is returned for transparency, not for
+	// rendering. A client that drew these would flash a step criterion 3 forbids.
+	SkippedSteps []string `json:"skipped_steps"`
+	// StepIndex is the cursor's position among the VISIBLE steps.
 	StepIndex   int            `json:"step_index"`
 	Completed   bool           `json:"completed"`
 	CompletedAt *time.Time     `json:"completed_at,omitempty"`
@@ -68,7 +76,33 @@ type OnboardingUseCase struct {
 	orgs     OrgUpdater
 	orgCur   OrgCurrencyUpdater
 	profiles ProfileUpdater
-	now      func() time.Time
+	// probe decides which steps are auto-skipped. Optional and nil-safe: with no
+	// probe every step is shown, which is the old behaviour and the safe default
+	// — showing a step the user did not need costs them a click; hiding one they
+	// did need loses their answer.
+	probe domain.OnboardingStepProbe
+	now   func() time.Time
+}
+
+// WithStepProbe attaches the auto-skip reader (#438 criteria 2 and 3).
+func (uc *OnboardingUseCase) WithStepProbe(p domain.OnboardingStepProbe) *OnboardingUseCase {
+	uc.probe = p
+	return uc
+}
+
+// stepData resolves the auto-skip decisions once. A probe failure degrades to
+// "skip nothing": a wizard that shows a redundant step is a minor annoyance, and
+// one that hides a step whose data does NOT exist strands the user on a tunnel
+// they cannot complete.
+func (uc *OnboardingUseCase) stepData(ctx context.Context, tenantID, userID uuid.UUID) domain.OnboardingStepData {
+	if uc.probe == nil {
+		return domain.OnboardingStepData{}
+	}
+	data, err := uc.probe.OnboardingStepData(ctx, tenantID, userID)
+	if err != nil {
+		return domain.OnboardingStepData{}
+	}
+	return data
 }
 
 // WithOrgCurrencyUpdater attaches the optional tenant-currency writer.
@@ -114,7 +148,10 @@ func (uc *OnboardingUseCase) GetState(ctx context.Context, tenantID, userID uuid
 			CurrentStep: domain.OnboardingStepOrganization,
 		}
 	}
-	return toWizardState(progress), nil
+
+	// Criterion 2: ONE call resolves the whole tunnel, auto-skip decisions
+	// included. No step may issue its own status call on mount.
+	return toWizardState(progress, uc.stepData(ctx, tenantID, userID)), nil
 }
 
 // SaveStepInput is one step's submission.
@@ -194,27 +231,68 @@ func (uc *OnboardingUseCase) SaveStep(ctx context.Context, tenantID, userID uuid
 	}
 
 	// Move the cursor. An explicit Next wins (including backwards); otherwise
-	// advance one step, clamped at the last.
-	progress.CurrentStep = uc.nextStep(input.Step, input.Next)
+	// advance one step, clamped at the last. Auto-skipped steps are stepped over
+	// in both directions — landing on a hidden step would strand the user on a
+	// screen the client is forbidden to render.
+	data := uc.stepData(ctx, tenantID, userID)
+	progress.CurrentStep = uc.nextStep(input.Step, input.Next, data)
 
 	if err := uc.repo.Save(ctx, progress); err != nil {
 		return nil, err
 	}
-	return toWizardState(progress), nil
+	return toWizardState(progress, data), nil
 }
 
-// nextStep resolves the cursor move.
-func (uc *OnboardingUseCase) nextStep(current domain.OnboardingStepKey, next string) domain.OnboardingStepKey {
+// nextStep resolves the cursor move over the VISIBLE steps only.
+//
+// An explicit Next that names a skipped step is honoured as a direction, not as
+// a destination: the cursor lands on the nearest visible step in that direction.
+// Silently ignoring it would leave the user on the step they just submitted.
+func (uc *OnboardingUseCase) nextStep(current domain.OnboardingStepKey, next string, data domain.OnboardingStepData) domain.OnboardingStepKey {
+	visible := data.VisibleSteps()
+	if len(visible) == 0 {
+		// Unreachable while `goal` is unskippable, but a cursor with nowhere to
+		// go must not be a panic.
+		return current
+	}
+
 	if next != "" {
 		if parsed, err := domain.ParseOnboardingStep(next); err == nil {
-			return parsed
+			backwards := parsed.Index() < current.Index()
+			return nearestVisible(parsed, visible, backwards)
 		}
 	}
+
 	idx := current.Index() + 1
 	if idx >= len(domain.OnboardingStepOrder) {
 		idx = len(domain.OnboardingStepOrder) - 1
 	}
-	return domain.OnboardingStepOrder[idx]
+	return nearestVisible(domain.OnboardingStepOrder[idx], visible, false)
+}
+
+// nearestVisible snaps a target onto the visible sequence, searching forward
+// (or backward) and falling back to the other direction at the ends.
+func nearestVisible(target domain.OnboardingStepKey, visible []domain.OnboardingStepKey, backwards bool) domain.OnboardingStepKey {
+	for _, s := range visible {
+		if s == target {
+			return target
+		}
+	}
+
+	if backwards {
+		for i := len(visible) - 1; i >= 0; i-- {
+			if visible[i].Index() < target.Index() {
+				return visible[i]
+			}
+		}
+		return visible[0]
+	}
+	for _, s := range visible {
+		if s.Index() > target.Index() {
+			return s
+		}
+	}
+	return visible[len(visible)-1]
 }
 
 // Complete closes the wizard and lifts the route guard. Idempotent: completing an
@@ -237,14 +315,17 @@ func (uc *OnboardingUseCase) Complete(ctx context.Context, tenantID, userID uuid
 		progress.Completed = true
 		progress.CompletedAt = &now
 	}
-	progress.CurrentStep = domain.OnboardingStepTeam
+	// Park the cursor on the last step this user actually saw, not on the
+	// catalogue's last step — which may be one they never walked.
+	visible := uc.stepData(ctx, tenantID, userID).VisibleSteps()
+	progress.CurrentStep = visible[len(visible)-1]
 	progress.TenantID = tenantID
 	progress.UserID = userID
 
 	if err := uc.repo.Save(ctx, progress); err != nil {
 		return nil, err
 	}
-	return toWizardState(progress), nil
+	return toWizardState(progress, uc.stepData(ctx, tenantID, userID)), nil
 }
 
 // Suggestions is the payload of GET /onboarding/suggestions: the sector/goal
@@ -294,10 +375,17 @@ func (uc *OnboardingUseCase) GetSuggestions(ctx context.Context, tenantID, userI
 // helpers
 // ---------------------------------------------------------------------------
 
-func toWizardState(p *domain.OnboardingProgress) *WizardState {
-	steps := make([]string, 0, len(domain.OnboardingStepOrder))
-	for _, s := range domain.OnboardingStepOrder {
+func toWizardState(p *domain.OnboardingProgress, data domain.OnboardingStepData) *WizardState {
+	visible := data.VisibleSteps()
+	steps := make([]string, 0, len(visible))
+	for _, s := range visible {
 		steps = append(steps, string(s))
+	}
+	skipped := make([]string, 0, len(domain.OnboardingStepOrder)-len(visible))
+	for _, s := range domain.OnboardingStepOrder {
+		if data.SkipsStep(s) {
+			skipped = append(skipped, string(s))
+		}
 	}
 
 	answers := p.Answers
@@ -305,26 +393,56 @@ func toWizardState(p *domain.OnboardingProgress) *WizardState {
 		answers = domain.JSONMap{}
 	}
 
-	idx := p.CurrentStep.Index()
+	// The cursor's position among the VISIBLE steps — what "step N of M" reads.
+	//
+	// A cursor pointing at a hidden step is SNAPPED onto the visible sequence
+	// rather than merely re-indexed. Two ways it gets there and both are normal:
+	// a brand-new progress row is initialised on `organization`, which may be the
+	// first step skipped; and a stored row can predate the data that now skips
+	// its step. Reporting the hidden key would tell the client to render a screen
+	// criterion 3 forbids, and reporting index 0 while naming a hidden step would
+	// have the stepper and the screen disagree.
+	cursor := p.CurrentStep
+	idx := -1
+	for i, s := range visible {
+		if s == cursor {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 && len(visible) > 0 {
+		cursor = nearestVisible(cursor, visible, false)
+		for i, s := range visible {
+			if s == cursor {
+				idx = i
+				break
+			}
+		}
+	}
+	if idx < 0 {
+		idx = 0
+	}
+
 	state := &WizardState{
-		CurrentStep: string(p.CurrentStep),
-		Steps:       steps,
-		StepIndex:   idx,
-		Completed:   p.Completed,
-		CompletedAt: p.CompletedAt,
-		Industry:    p.Industry,
-		Country:     p.Country,
-		Goal:        p.Goal,
-		Answers:     answers,
-		Landing:     onboarding.LandingForGoal(p.Goal),
+		CurrentStep:  string(cursor),
+		Steps:        steps,
+		SkippedSteps: skipped,
+		StepIndex:    idx,
+		Completed:    p.Completed,
+		CompletedAt:  p.CompletedAt,
+		Industry:     p.Industry,
+		Country:      p.Country,
+		Goal:         p.Goal,
+		Answers:      answers,
+		Landing:      onboarding.LandingForGoal(p.Goal),
 	}
 	if p.Completed {
 		state.Percent = 100
 	} else {
 		state.Percent = idx * 100 / len(steps)
 	}
-	if state.CurrentStep == "" {
-		state.CurrentStep = string(domain.OnboardingStepOrganization)
+	if state.CurrentStep == "" && len(visible) > 0 {
+		state.CurrentStep = string(visible[0])
 	}
 	return state
 }

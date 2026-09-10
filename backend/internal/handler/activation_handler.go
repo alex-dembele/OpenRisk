@@ -25,6 +25,11 @@ type ActivationHandler struct {
 	state      *appactivation.GetStateUseCase
 	celebrated *appactivation.MarkCelebratedUseCase
 	onboarding *appactivation.OnboardingUseCase
+	// posture and recognition are OPTIONAL (nil-safe): a deployment that has not
+	// wired the posture reader still serves the checklist and the wizard. They
+	// answer 503 rather than an empty posture — see GetPosture.
+	posture     *appactivation.PostureUseCase
+	recognition *appactivation.RecognitionUseCase
 }
 
 // NewActivationHandler wires the handler.
@@ -34,6 +39,67 @@ func NewActivationHandler(
 	onboarding *appactivation.OnboardingUseCase,
 ) *ActivationHandler {
 	return &ActivationHandler{state: state, celebrated: celebrated, onboarding: onboarding}
+}
+
+// WithPosture attaches the Posture Reveal use case (#438).
+func (h *ActivationHandler) WithPosture(uc *appactivation.PostureUseCase) *ActivationHandler {
+	h.posture = uc
+	return h
+}
+
+// WithRecognition attaches the recognition use case (#438 criterion 9).
+func (h *ActivationHandler) WithRecognition(uc *appactivation.RecognitionUseCase) *ActivationHandler {
+	h.recognition = uc
+	return h
+}
+
+// GetPosture GET /posture
+//
+// The Posture Reveal: the screen that DEFINES the Aha moment, computed entirely
+// from this tenant's own rows. Recording `posture.revealed` and observing the v2
+// time-to-Aha histogram happen inside the use case, exactly once per tenant.
+//
+// The 404 on this route is load-bearing and is NOT a missing-resource error in
+// the usual sense: #438 criterion 8 requires that a reveal which would render
+// empty produces an explicit error state and records NOTHING. Answering 200 with
+// zeros would turn a rendering failure into a green launch-gate metric.
+func (h *ActivationHandler) GetPosture(c *fiber.Ctx) error {
+	tenantID, userID, ok := h.identity(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+	if h.posture == nil {
+		return c.Status(fiber.StatusServiceUnavailable).
+			JSON(fiber.Map{"error": "Posture is not available on this deployment"})
+	}
+
+	summary, err := h.posture.Execute(c.UserContext(), tenantID, userID)
+	if err != nil {
+		return writeAppError(c, err)
+	}
+	return c.JSON(summary)
+}
+
+// GetRecognition GET /onboarding/recognition
+//
+// What OpenRisk already knows about a tenant that was configured before the
+// tunnel existed (#438 criterion 9). The SERVER decides whether the tunnel is
+// skipped: a client that could choose would be a client that can skip it.
+func (h *ActivationHandler) GetRecognition(c *fiber.Ctx) error {
+	tenantID, userID, ok := h.identity(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+	if h.recognition == nil {
+		return c.Status(fiber.StatusServiceUnavailable).
+			JSON(fiber.Map{"error": "Recognition is not available on this deployment"})
+	}
+
+	recognition, err := h.recognition.Execute(c.UserContext(), tenantID, userID)
+	if err != nil {
+		return writeAppError(c, err)
+	}
+	return c.JSON(recognition)
 }
 
 // identity resolves (tenant, user) from the request context.
