@@ -25,6 +25,10 @@ const SCREENS: { path: string; name: string }[] = [
   { path: '/reports', name: 'Reports' },
   { path: '/settings', name: 'Settings' },
   { path: '/settings?tab=billing', name: 'Billing' },
+  // #438 criterion 12. The seeded admin has risks and controls, so this renders
+  // the REVEAL rather than the error state — scanning the error screen would
+  // pass while leaving the screen a customer actually sees unchecked.
+  { path: '/posture', name: 'Posture reveal' },
   { path: '/this-route-does-not-exist', name: '404 page' },
 ];
 
@@ -81,7 +85,9 @@ for (const screen of SCREENS) {
 // while scanning the wrong page. So this block signs up its own tenant.
 // ---------------------------------------------------------------------------
 
-const WIZARD_STEPS = ['organization', 'profile', 'goal', 'framework', 'team'] as const;
+// #438 re-sequenced the tunnel: `profile` merged into `organization`, `team`
+// moved to the Posture Reveal, and `score` + `cover` were added.
+const WIZARD_STEPS = ['organization', 'goal', 'framework', 'score', 'cover'] as const;
 
 test.describe('a11y — onboarding', () => {
   // This block owns its identity; the shared admin storageState must not leak in.
@@ -126,8 +132,13 @@ test.describe('a11y — onboarding', () => {
     // Finish the wizard so the guard lifts, but complete nothing else: the
     // checklist only renders while steps remain outstanding, so a fully
     // activated tenant would give us a dashboard with no checklist to scan.
-    await client.put('/onboarding/steps/profile', {
-      answers: { full_name: 'Awa Newcomer', job_title: 'RSSI', language: 'fr' },
+    await client.put('/onboarding/steps/organization', {
+      answers: {
+        name: 'Awa Test Org',
+        industry: 'banking',
+        full_name: 'Awa Newcomer',
+        job_title: 'RSSI',
+      },
     });
     await client.post('/onboarding/complete', {});
 
@@ -145,6 +156,63 @@ test.describe('a11y — onboarding', () => {
     ).toBeVisible({ timeout: 15_000 });
 
     await expectNoBlockingViolations(page, info, 'activation-checklist', '/ (checklist)');
+
+    await ctx.close();
+    await api.dispose();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #438 criterion 12 — the recognition screen.
+//
+// It cannot join SCREENS: it lives under /onboarding, and the seeded admin has
+// completed the wizard, so OnboardingCompletedRedirect would bounce the scan to
+// the dashboard and pass while checking the wrong page. It also needs a tenant
+// that HOLDS data while its wizard is unfinished — the exact population #234
+// backfilled — so this block builds one.
+// ---------------------------------------------------------------------------
+
+test.describe('a11y — recognition (#438)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('a11y: recognition (/onboarding/recognition)', async ({ browser }, info) => {
+    const api = await pwRequest.newContext();
+    const tenant = await signUp(api, 'a11yrecog');
+    const client = authed(api, tenant.token);
+
+    // One real risk is enough to make the tenant "recognised" server-side. The
+    // wizard is deliberately NOT completed: recognition is the screen that
+    // REPLACES the tunnel, so a completed tenant would never reach it.
+    const created = await client.post('/risks', {
+      title: 'Risque préexistant',
+      description: 'Créé avant que le tunnel existe.',
+      probability: 0.4,
+      impact: 7,
+    });
+    expect(
+      [200, 201].includes(created.status()),
+      `seeding a risk should succeed: ${await created.text()}`,
+    ).toBeTruthy();
+
+    const ctx = await browser.newContext({ storageState: tenant.storageState });
+    const page = await ctx.newPage();
+    await page.goto('/onboarding/recognition', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+
+    // The silent-redirect trap again: a scan of the wrong screen is worse than
+    // no scan, because it reports green.
+    await expect(page, 'the recognition screen must actually be on screen').toHaveURL(
+      /\/onboarding\/recognition/,
+      { timeout: 15_000 },
+    );
+    await expect(page.getByTestId('recognition')).toBeVisible({ timeout: 15_000 });
+
+    await expectNoBlockingViolations(
+      page,
+      info,
+      'onboarding-recognition',
+      '/onboarding/recognition',
+    );
 
     await ctx.close();
     await api.dispose();

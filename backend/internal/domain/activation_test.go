@@ -122,8 +122,27 @@ func TestOnboardingStep_Index(t *testing.T) {
 	if OnboardingStepOrganization.Index() != 0 {
 		t.Error("organization must be the first step")
 	}
-	if OnboardingStepTeam.Index() != len(OnboardingStepOrder)-1 {
-		t.Error("team must be the last step")
+	// #438 re-sequenced the tunnel: the last step is `cover`, the one that shows
+	// the residual falling. Ending on an invitation form was the old ordering's
+	// mistake — it asked the user to invite colleagues to look at nothing.
+	if OnboardingStepCover.Index() != len(OnboardingStepOrder)-1 {
+		t.Errorf("cover must be the last step, got index %d of %d",
+			OnboardingStepCover.Index(), len(OnboardingStepOrder))
+	}
+	if len(OnboardingStepOrder) != 5 {
+		t.Errorf("the tunnel has %d steps; #438 keeps the count at five so the stepper still reads \"N sur 5\"",
+			len(OnboardingStepOrder))
+	}
+
+	// The retired routes must not be walkable. Their constants survive so stored
+	// answers stay readable, but no client may resurrect the route.
+	for _, retired := range []OnboardingStepKey{OnboardingStepProfile, OnboardingStepTeam} {
+		if _, err := ParseOnboardingStep(string(retired)); err == nil {
+			t.Errorf("the retired step %q must be rejected by ParseOnboardingStep", retired)
+		}
+		if retired.Index() != -1 {
+			t.Errorf("%q is retired but still has index %d", retired, retired.Index())
+		}
 	}
 }
 

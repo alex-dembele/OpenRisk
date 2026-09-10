@@ -18,18 +18,34 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
 
-import { useOnboardingState } from './useActivation';
+import { useOnboardingState, useRecognition } from './useActivation';
 
 /** Wraps the protected app shell. */
 export function OnboardingGuard({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { data, isLoading, isError } = useOnboardingState();
 
+  // #438 criterion 9. Only asked for when the tunnel would otherwise run: a
+  // completed user never needs it, and firing it on every protected navigation
+  // would be a second call on a path that already has one.
+  const needsRouting = Boolean(data) && !data?.completed;
+  const { data: recognition, isLoading: recognitionLoading } = useRecognition(needsRouting);
+
   if (isLoading && !data) return <GuardPlaceholder />;
   if (isError || !data) return <>{children}</>; // fail open, on purpose
 
   if (!data.completed) {
-    const target = `/onboarding/${data.current_step || 'organization'}`;
+    // Wait for the recognition answer before choosing a destination. Sending a
+    // configured bank into the tunnel for one render and yanking it out on the
+    // next is worse than a moment of nothing — and criterion 9 says that tenant
+    // must not see the tunnel at all.
+    if (recognitionLoading && !recognition) return <GuardPlaceholder />;
+
+    // A tenant that already holds data does not get asked to create its first
+    // risk. The SERVER decides this; the client only obeys `skip_tunnel`.
+    const target = recognition?.skip_tunnel
+      ? '/onboarding/recognition'
+      : `/onboarding/${data.current_step || 'organization'}`;
     if (pathname !== target) return <Navigate to={target} replace />;
   }
   return <>{children}</>;

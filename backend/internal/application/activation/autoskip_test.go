@@ -35,7 +35,9 @@ func (p *fakeProbe) OnboardingStepData(_ context.Context, _, _ uuid.UUID) (domai
 func TestWizard_AutoSkippedStepsAreAbsentFromTheStepper(t *testing.T) {
 	repo := newFakeRepo()
 	probe := &fakeProbe{data: domain.OnboardingStepData{
+		// Both answers, because the organization step absorbed the profile one.
 		HasOrganizationProfile: true,
+		HasUserProfile:         true,
 		HasFramework:           true,
 	}}
 	uc := newWizard(repo).WithStepProbe(probe)
@@ -77,9 +79,11 @@ func TestWizard_StateResolvesAutoSkipInASingleProbe(t *testing.T) {
 	}
 }
 
-// `goal` is a preference, not a record. Nothing stored can prove what a user
-// wants next, so skipping it would silently choose their landing page.
-func TestWizard_GoalIsNeverSkippable(t *testing.T) {
+// The three steps that can never be skipped, each for its own reason: `goal` is
+// a preference no stored row can prove, and `score`/`cover` are the two screens
+// that RETURN something computed — skipping them hands back exactly the
+// activation cliff #438 exists to remove.
+func TestWizard_GoalScoreAndCoverAreNeverSkippable(t *testing.T) {
 	everything := domain.OnboardingStepData{
 		HasOrganizationProfile: true,
 		HasUserProfile:         true,
@@ -88,11 +92,21 @@ func TestWizard_GoalIsNeverSkippable(t *testing.T) {
 	}
 
 	visible := everything.VisibleSteps()
-	if len(visible) != 1 || visible[0] != domain.OnboardingStepGoal {
-		t.Fatalf("visible steps = %v, want only the goal", visible)
+	want := []domain.OnboardingStepKey{
+		domain.OnboardingStepGoal,
+		domain.OnboardingStepScore,
+		domain.OnboardingStepCover,
 	}
-	if everything.SkipsStep(domain.OnboardingStepGoal) {
-		t.Error("the goal step must never be skipped")
+	if len(visible) != len(want) {
+		t.Fatalf("visible steps = %v, want %v", visible, want)
+	}
+	for i, step := range want {
+		if visible[i] != step {
+			t.Errorf("visible[%d] = %q, want %q", i, visible[i], step)
+		}
+		if everything.SkipsStep(step) {
+			t.Errorf("%q must never be skipped", step)
+		}
 	}
 
 	repo := newFakeRepo()
@@ -101,8 +115,26 @@ func TestWizard_GoalIsNeverSkippable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetState: %v", err)
 	}
-	if len(state.Steps) != 1 || state.Steps[0] != string(domain.OnboardingStepGoal) {
-		t.Errorf("a fully configured user must still answer the goal, got %v", state.Steps)
+	if len(state.Steps) != len(want) {
+		t.Errorf("a fully configured user must still walk %d steps, got %v", len(want), state.Steps)
+	}
+}
+
+// The organization step absorbed the retired profile step, so ONE of the two
+// answers is not enough to skip it — the checklist's `profile` row is ticked
+// from there, and skipping on the company alone would leave it unticked forever.
+func TestWizard_OrganizationNeedsBothAnswersToBeSkipped(t *testing.T) {
+	orgOnly := domain.OnboardingStepData{HasOrganizationProfile: true}
+	if orgOnly.SkipsStep(domain.OnboardingStepOrganization) {
+		t.Error("the company alone must not skip the step that also asks for the person")
+	}
+	userOnly := domain.OnboardingStepData{HasUserProfile: true}
+	if userOnly.SkipsStep(domain.OnboardingStepOrganization) {
+		t.Error("the person alone must not skip the step that also asks for the company")
+	}
+	both := domain.OnboardingStepData{HasOrganizationProfile: true, HasUserProfile: true}
+	if !both.SkipsStep(domain.OnboardingStepOrganization) {
+		t.Error("with both answers stored the step has nothing left to ask")
 	}
 }
 
@@ -110,40 +142,28 @@ func TestWizard_GoalIsNeverSkippable(t *testing.T) {
 // strand the user on a screen the client must not draw.
 func TestWizard_CursorStepsOverHiddenSteps(t *testing.T) {
 	repo := newFakeRepo()
-	// profile and framework hidden ⇒ visible: organization, goal, team
-	probe := &fakeProbe{data: domain.OnboardingStepData{HasUserProfile: true, HasFramework: true}}
+	// framework hidden ⇒ visible: organization, goal, score, cover
+	probe := &fakeProbe{data: domain.OnboardingStepData{HasFramework: true}}
 	uc := newWizard(repo).WithStepProbe(probe)
 	tenant, user := uuid.New(), uuid.New()
 
-	// Forward from organization: profile is hidden, so goal is next.
+	// Forward from goal: framework is hidden, so score is next.
 	state, err := uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
-		Step:    domain.OnboardingStepOrganization,
-		Answers: domain.JSONMap{"industry": "banking", "country": "CM"},
-	})
-	if err != nil {
-		t.Fatalf("SaveStep: %v", err)
-	}
-	if state.CurrentStep != string(domain.OnboardingStepGoal) {
-		t.Errorf("forward cursor = %q, want goal (profile is hidden)", state.CurrentStep)
-	}
-
-	// Forward from goal: framework is hidden, so team is next.
-	state, err = uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
 		Step:    domain.OnboardingStepGoal,
 		Answers: domain.JSONMap{"goal": "compliance"},
 	})
 	if err != nil {
 		t.Fatalf("SaveStep: %v", err)
 	}
-	if state.CurrentStep != string(domain.OnboardingStepTeam) {
-		t.Errorf("forward cursor = %q, want team (framework is hidden)", state.CurrentStep)
+	if state.CurrentStep != string(domain.OnboardingStepScore) {
+		t.Errorf("forward cursor = %q, want score (framework is hidden)", state.CurrentStep)
 	}
 
-	// An explicit backwards Next naming a HIDDEN step is honoured as a direction:
-	// the cursor lands on the nearest visible step behind it, never on the hidden
-	// one and never staying put.
+	// An explicit Next naming a HIDDEN step is honoured as a DIRECTION, not a
+	// destination: the cursor lands on the nearest visible step that way, never
+	// on the hidden one and never staying put.
 	state, err = uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
-		Step:    domain.OnboardingStepTeam,
+		Step:    domain.OnboardingStepScore,
 		Answers: domain.JSONMap{},
 		Next:    string(domain.OnboardingStepFramework),
 	})
@@ -152,6 +172,14 @@ func TestWizard_CursorStepsOverHiddenSteps(t *testing.T) {
 	}
 	if state.CurrentStep != string(domain.OnboardingStepGoal) {
 		t.Errorf("backwards cursor = %q, want goal (framework is hidden)", state.CurrentStep)
+	}
+
+	// A RETIRED route is rejected outright — no client may resurrect one.
+	if _, err := uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
+		Step:    domain.OnboardingStepTeam,
+		Answers: domain.JSONMap{},
+	}); err == nil {
+		t.Error("saving a retired step must be rejected")
 	}
 }
 
@@ -163,10 +191,13 @@ func TestWizard_StepIndexIsRelativeToVisibleSteps(t *testing.T) {
 	repo.progress[user.String()] = &domain.OnboardingProgress{
 		TenantID:    tenant,
 		UserID:      user,
-		CurrentStep: domain.OnboardingStepTeam,
+		CurrentStep: domain.OnboardingStepCover,
 	}
-	// organization hidden ⇒ visible: profile, goal, framework, team
-	uc := newWizard(repo).WithStepProbe(&fakeProbe{data: domain.OnboardingStepData{HasOrganizationProfile: true}})
+	// organization hidden ⇒ visible: goal, framework, score, cover
+	uc := newWizard(repo).WithStepProbe(&fakeProbe{data: domain.OnboardingStepData{
+		HasOrganizationProfile: true,
+		HasUserProfile:         true,
+	}})
 
 	state, err := uc.GetState(context.Background(), tenant, user)
 	if err != nil {
@@ -176,7 +207,8 @@ func TestWizard_StepIndexIsRelativeToVisibleSteps(t *testing.T) {
 		t.Errorf("step %d of %d, want 3 of 4", state.StepIndex, len(state.Steps))
 	}
 
-	// A stored cursor parked on a NOW-hidden step must not render as index −1.
+	// A stored cursor parked on a NOW-hidden step must resolve inside the
+	// visible range, and must not be REPORTED as the hidden step either.
 	repo.progress[user.String()].CurrentStep = domain.OnboardingStepOrganization
 	state, err = uc.GetState(context.Background(), tenant, user)
 	if err != nil {
@@ -184,6 +216,23 @@ func TestWizard_StepIndexIsRelativeToVisibleSteps(t *testing.T) {
 	}
 	if state.StepIndex < 0 || state.StepIndex >= len(state.Steps) {
 		t.Errorf("a cursor on a hidden step resolved to index %d of %d", state.StepIndex, len(state.Steps))
+	}
+	if state.CurrentStep == string(domain.OnboardingStepOrganization) {
+		t.Error("the reported cursor must be snapped onto the visible sequence")
+	}
+
+	// A cursor on a RETIRED route is the same problem with a different cause:
+	// stored rows written before #438 point at `profile`.
+	repo.progress[user.String()].CurrentStep = domain.OnboardingStepProfile
+	state, err = uc.GetState(context.Background(), tenant, user)
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if state.StepIndex < 0 || state.StepIndex >= len(state.Steps) {
+		t.Errorf("a retired cursor resolved to index %d of %d", state.StepIndex, len(state.Steps))
+	}
+	if state.CurrentStep == string(domain.OnboardingStepProfile) {
+		t.Error("a retired route must never be reported as the current step")
 	}
 }
 
@@ -220,21 +269,33 @@ func TestWizard_NoProbeShowsEveryStep(t *testing.T) {
 // catalogue's last step — which may be one they never walked.
 func TestWizard_CompleteParksOnTheLastVisibleStep(t *testing.T) {
 	repo := newFakeRepo()
-	uc := newWizard(repo).WithStepProbe(&fakeProbe{data: domain.OnboardingStepData{HasTeam: true}})
+	// framework hidden ⇒ visible: organization, goal, score, cover
+	uc := newWizard(repo).WithStepProbe(&fakeProbe{data: domain.OnboardingStepData{HasFramework: true}})
 	tenant, user := uuid.New(), uuid.New()
 
 	state, err := uc.Complete(context.Background(), tenant, user)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
-	if state.CurrentStep == string(domain.OnboardingStepTeam) {
-		t.Error("the cursor parked on the hidden team step")
-	}
-	if state.CurrentStep != string(domain.OnboardingStepFramework) {
-		t.Errorf("cursor = %q, want the last visible step (framework)", state.CurrentStep)
+	if state.CurrentStep != string(domain.OnboardingStepCover) {
+		t.Errorf("cursor = %q, want the last visible step (cover)", state.CurrentStep)
 	}
 	if !state.Completed {
 		t.Error("Complete must complete")
+	}
+
+	// With `cover` itself hidden the cursor would park on whatever is last —
+	// but `cover` is unskippable, so this asserts that invariant from the other
+	// side: it is ALWAYS the terminal step.
+	hidden := domain.OnboardingStepData{
+		HasOrganizationProfile: true,
+		HasUserProfile:         true,
+		HasFramework:           true,
+		HasTeam:                true,
+	}
+	visible := hidden.VisibleSteps()
+	if visible[len(visible)-1] != domain.OnboardingStepCover {
+		t.Errorf("the tunnel must always end on cover, got %q", visible[len(visible)-1])
 	}
 }
 
@@ -245,12 +306,14 @@ func TestOnboardingStepData_SkipsStep(t *testing.T) {
 		HasFramework:           true,
 		HasTeam:                true,
 	}
+	// #438's sequence: organization (company + person), goal, framework, score,
+	// cover. `profile` and `team` are retired routes and are not in it.
 	for step, want := range map[domain.OnboardingStepKey]bool{
 		domain.OnboardingStepOrganization: true,
-		domain.OnboardingStepProfile:      true,
 		domain.OnboardingStepFramework:    true,
-		domain.OnboardingStepTeam:         true,
 		domain.OnboardingStepGoal:         false,
+		domain.OnboardingStepScore:        false,
+		domain.OnboardingStepCover:        false,
 	} {
 		if got := full.SkipsStep(step); got != want {
 			t.Errorf("SkipsStep(%q) = %v, want %v", step, got, want)
@@ -265,5 +328,18 @@ func TestOnboardingStepData_SkipsStep(t *testing.T) {
 	}
 	if len(empty.VisibleSteps()) != len(domain.OnboardingStepOrder) {
 		t.Error("an empty tenant must see every step")
+	}
+
+	// A retired route is not "skippable", it is absent. VisibleSteps walks the
+	// order, so it can never surface one.
+	for _, retired := range []domain.OnboardingStepKey{
+		domain.OnboardingStepProfile,
+		domain.OnboardingStepTeam,
+	} {
+		for _, visible := range full.VisibleSteps() {
+			if visible == retired {
+				t.Errorf("the retired route %q surfaced in the visible steps", retired)
+			}
+		}
 	}
 }

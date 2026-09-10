@@ -50,6 +50,19 @@ interface UIState {
   lang: Lang;
   density: Density;
   sidebarCollapsed: boolean;
+  /**
+   * The get-started checklist is hidden by the user's choice (#438 criterion 15).
+   *
+   * A UI PREFERENCE, not activation state. Activation lives on the server and
+   * always will — that is what fixed the checklist that never ticked. But "I do
+   * not want to look at this panel" is about this person on this device, it is
+   * not a fact about the tenant, and putting it on the server would make hiding
+   * a panel a write to the product's activation record.
+   *
+   * Deliberately does NOT hide the tunnel, which has no dismiss at all
+   * (criterion 1). Different surfaces, opposite rules.
+   */
+  checklistHidden: boolean;
   /** ⌘K command palette open state (not persisted). */
   cmdkOpen: boolean;
 
@@ -62,6 +75,7 @@ interface UIState {
   setDensity: (d: Density) => void;
   cycleDensity: () => void;
   toggleSidebar: () => void;
+  setChecklistHidden: (hidden: boolean) => void;
   setSidebarCollapsed: (v: boolean) => void;
   setCmdkOpen: (v: boolean) => void;
   toggleCmdk: () => void;
@@ -116,6 +130,7 @@ export const useUIStore = create<UIState>()(
       lang: legacyLocale,
       density: 'comfort',
       sidebarCollapsed: false,
+      checklistHidden: false,
       cmdkOpen: false,
 
       // Choosing an explicit theme is also choosing to stop following the OS.
@@ -166,6 +181,7 @@ export const useUIStore = create<UIState>()(
       },
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setChecklistHidden: (checklistHidden) => set({ checklistHidden }),
       setCmdkOpen: (cmdkOpen) => set({ cmdkOpen }),
       toggleCmdk: () => set({ cmdkOpen: !get().cmdkOpen }),
     }),
@@ -177,6 +193,9 @@ export const useUIStore = create<UIState>()(
         lang: s.lang,
         density: s.density,
         sidebarCollapsed: s.sidebarCollapsed,
+        // Persisted, or closing the checklist would last until the next reload
+        // and read as a bug rather than as a choice (#438 criterion 15).
+        checklistHidden: s.checklistHidden,
       }),
       onRehydrateStorage: () => (state) => {
         // Once persisted prefs are loaded, reflect them onto <html>.

@@ -10,155 +10,26 @@
 //     an invitation is mandatory is how you lose someone on their first day.
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { ArrowLeft, ArrowRight, Check, Copy, Loader2, Users } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useUIStore } from '../../../store/uiStore';
 import { useAuthStore } from '../../../hooks/useAuthStore';
 import { i18n, type OnboardingStepKey } from '../../../services/activationService';
 import {
-  useCompleteOnboarding,
-  useOnboardingState,
+  useAdoptStarterRisks,
   useOnboardingSuggestions,
-  useSaveOnboardingStep,
+  useStarterRisks,
 } from '../useActivation';
 import { useCatalogs, useImportCatalogAsFramework } from '../../compliance/useCompliance';
-import { WIZARD_STEPS, stepPath } from './OnboardingWizard';
+import type { StarterRiskOffer } from '../../../services/activationService';
+import { Field, StepShell } from './stepPrimitives';
+import { inputCls, inputStyle, str, useStepNav, useStoredAnswers } from './stepNav';
 import type { LocaleCode } from '../../../i18n/locales';
 
 // ---------------------------------------------------------------------------
 // Shared primitives
 // ---------------------------------------------------------------------------
-
-const inputCls =
-  'w-full h-11 px-3.5 rounded-[10px] text-[14px] text-ink outline-none transition-colors';
-const inputStyle: React.CSSProperties = {
-  background: 'var(--bg-elevated)',
-  border: '1px solid var(--border-strong)',
-};
-
-function Field({
-  label,
-  hint,
-  children,
-  htmlFor,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-  htmlFor?: string;
-}) {
-  return (
-    <div className="mb-4">
-      <label htmlFor={htmlFor} className="block text-[12.5px] font-semibold text-ink mb-1.5">
-        {label}
-      </label>
-      {children}
-      {hint && <div className="text-[11.5px] text-ink-muted mt-1">{hint}</div>}
-    </div>
-  );
-}
-
-function StepShell({
-  title,
-  subtitle,
-  children,
-  onBack,
-  onNext,
-  nextLabel,
-  nextDisabled,
-  busy,
-  secondary,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-  onBack?: () => void;
-  onNext: () => void;
-  nextLabel: string;
-  nextDisabled?: boolean;
-  busy?: boolean;
-  secondary?: React.ReactNode;
-}) {
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!busy && !nextDisabled) onNext();
-      }}
-      style={{ animation: 'or-fadeup .35s ease' }}
-    >
-      <h1 className="disp text-[24px] font-bold text-ink mb-1.5">{title}</h1>
-      <p className="text-[14px] text-ink-soft mb-6">{subtitle}</p>
-
-      {children}
-
-      <div className="flex items-center gap-3 mt-7 flex-wrap">
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="h-11 px-4 rounded-[10px] text-[13.5px] font-semibold text-ink inline-flex items-center gap-1.5"
-            style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-strong)' }}
-          >
-            <ArrowLeft size={15} />
-            Retour
-          </button>
-        )}
-        <button
-          type="submit"
-          disabled={busy || nextDisabled}
-          data-testid="wizard-next"
-          className="h-11 px-5 rounded-[10px] text-[13.5px] font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-          style={{
-            background: 'var(--accent-solid)',
-            color: 'var(--fg-on-solid)',
-          }}
-        >
-          {busy ? <Loader2 size={15} className="animate-spin" /> : null}
-          {nextLabel}
-          {!busy && <ArrowRight size={15} />}
-        </button>
-        {secondary}
-      </div>
-    </form>
-  );
-}
-
-/** Read a stored answer for a step, so a resumed wizard shows what was typed. */
-function useStoredAnswers(step: OnboardingStepKey): Record<string, unknown> {
-  const { data } = useOnboardingState();
-  return useMemo(() => (data?.answers?.[step] ?? {}) as Record<string, unknown>, [data, step]);
-}
-
-function str(answers: Record<string, unknown>, key: string, fallback = ''): string {
-  const v = answers[key];
-  return typeof v === 'string' ? v : fallback;
-}
-
-/** Save-then-navigate, shared by every step. */
-function useStepNav(step: OnboardingStepKey) {
-  const navigate = useNavigate();
-  const save = useSaveOnboardingStep();
-  const index = WIZARD_STEPS.findIndex((s) => s.key === step);
-
-  const go = (answers: Record<string, unknown>, direction: 1 | -1) => {
-    const target = WIZARD_STEPS[Math.min(WIZARD_STEPS.length - 1, Math.max(0, index + direction))];
-    save.mutate(
-      { step, answers, next: target.key },
-      {
-        onSuccess: () => navigate(stepPath(target.key)),
-        onError: () =>
-          toast.error(
-            "Impossible d'enregistrer cette étape. Vérifiez votre connexion et réessayez.",
-          ),
-      },
-    );
-  };
-
-  return { go, busy: save.isPending, index };
-}
 
 // ---------------------------------------------------------------------------
 // 1. Organization
@@ -191,9 +62,10 @@ export function OrganizationStep() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const stored = useStoredAnswers('organization');
-  const { go, busy } = useStepNav('organization');
+  const { go, busy, error, retry } = useStepNav('organization');
   const { data: suggestions } = useOnboardingSuggestions();
   const orgName = useAuthStore((s) => s.user?.org_name);
+  const user = useAuthStore((s) => s.user);
 
   const [name, setName] = useState('');
   const [industry, setIndustry] = useState('');
@@ -201,9 +73,18 @@ export function OrganizationStep() {
   const [country, setCountry] = useState('');
   const [currency, setCurrency] = useState('');
   const [timezone, setTimezone] = useState('');
+  // #438 merged the retired `profile` route into this step. The person's fields
+  // live here now; the server records the `profile` checklist milestone from the
+  // same submission, so the row still ticks from a server fact.
+  const [fullName, setFullName] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
 
   // Seed from the server's stored answers once they arrive (resume), falling
-  // back to what we already know about the account.
+  // back to what we already know about the account. `profile` is read as a
+  // fallback source: a user who walked the OLD five-step wizard has their name
+  // stored under that retired key, and asking them to type it again would be a
+  // regression they would rightly report.
+  const legacyProfile = useStoredAnswers('profile' as OnboardingStepKey);
   useEffect(() => {
     setName(str(stored, 'name', orgName ?? ''));
     setIndustry(str(stored, 'industry'));
@@ -211,22 +92,68 @@ export function OrganizationStep() {
     setCountry(str(stored, 'country'));
     setCurrency(str(stored, 'currency'));
     setTimezone(str(stored, 'timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'));
-  }, [stored, orgName]);
+    setFullName(
+      str(stored, 'full_name', str(legacyProfile, 'full_name', user?.full_name ?? '')),
+    );
+    setJobTitle(str(stored, 'job_title', str(legacyProfile, 'job_title', user?.department ?? '')));
+  }, [stored, legacyProfile, orgName, user]);
 
-  const answers = { name, industry, size, country, currency, timezone };
+  const answers = {
+    name,
+    industry,
+    size,
+    country,
+    currency,
+    timezone,
+    full_name: fullName,
+    job_title: jobTitle,
+  };
 
   return (
     <StepShell
       title={tr('Votre organisation', 'Your organization')}
       subtitle={tr(
-        'Ces réponses choisissent les référentiels et les risques que nous vous proposerons — rien de plus.',
-        'These answers pick the frameworks and risks we will suggest — nothing more.',
+        'Le secteur et le pays choisissent le référentiel que nous vous proposerons ; votre nom rend les assignations lisibles par vos collègues.',
+        'Your sector and country pick the framework we will propose; your name is what makes assignments readable to your colleagues.',
       )}
       onNext={() => go(answers, 1)}
       nextLabel={tr('Continuer', 'Continue')}
-      nextDisabled={!name.trim()}
+      // Both halves are required: the company names the tenant, the person makes
+      // assignments readable. The server ticks the `profile` checklist row only
+      // when a name is given, so letting this through empty would leave a row
+      // that can never tick.
+      nextDisabled={!name.trim() || !fullName.trim()}
       busy={busy}
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+        <Field label={tr('Votre nom complet', 'Your full name')} htmlFor="p-name">
+          <input
+            id="p-name"
+            data-testid="profile-name"
+            className={inputCls}
+            style={inputStyle}
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
+        </Field>
+        <Field label={tr('Votre fonction', 'Your job title')} htmlFor="p-job">
+          <input
+            id="p-job"
+            data-testid="profile-job"
+            className={inputCls}
+            style={inputStyle}
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            placeholder={tr('RSSI, DSI, Auditeur…', 'CISO, CIO, Auditor…')}
+          />
+        </Field>
+      </div>
+
       <Field label={tr("Nom de l'organisation", 'Organization name')} htmlFor="org-name">
         <input
           id="org-name"
@@ -332,167 +259,64 @@ export function OrganizationStep() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Profile
-// ---------------------------------------------------------------------------
-
-export function ProfileStep() {
-  const lang = useUIStore((s) => s.lang);
-  const setLang = useUIStore((s) => s.setLang);
-  const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
-  const stored = useStoredAnswers('profile');
-  const { go, busy } = useStepNav('profile');
-  const user = useAuthStore((s) => s.user);
-
-  const [fullName, setFullName] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [language, setLanguage] = useState<LocaleCode>(lang);
-  const [notifyInApp, setNotifyInApp] = useState(true);
-  const [notifyEmail, setNotifyEmail] = useState(true);
-
-  useEffect(() => {
-    setFullName(str(stored, 'full_name', user?.full_name ?? ''));
-    setJobTitle(str(stored, 'job_title', user?.department ?? ''));
-    setAvatarUrl(str(stored, 'avatar_url'));
-    const storedLang = str(stored, 'language');
-    if (storedLang === 'fr' || storedLang === 'en') setLanguage(storedLang);
-    if (typeof stored.notify_in_app === 'boolean') setNotifyInApp(stored.notify_in_app);
-    if (typeof stored.notify_email === 'boolean') setNotifyEmail(stored.notify_email);
-  }, [stored, user]);
-
-  const answers = {
-    full_name: fullName,
-    job_title: jobTitle,
-    avatar_url: avatarUrl,
-    language,
-    notify_in_app: notifyInApp,
-    notify_email: notifyEmail,
-  };
-
-  const submit = (direction: 1 | -1) => {
-    // Apply the language immediately: it is a display preference, and making
-    // someone wait for a round-trip to read their own interface is absurd.
-    if (language !== lang) setLang(language);
-    go(answers, direction);
-  };
-
-  return (
-    <StepShell
-      title={tr('Votre profil', 'Your profile')}
-      subtitle={tr(
-        'Votre nom rend les assignations lisibles par vos collègues.',
-        'Your name is what makes assignments readable to your colleagues.',
-      )}
-      onBack={() => submit(-1)}
-      onNext={() => submit(1)}
-      nextLabel={tr('Continuer', 'Continue')}
-      nextDisabled={!fullName.trim()}
-      busy={busy}
-    >
-      <Field label={tr('Nom complet', 'Full name')} htmlFor="p-name">
-        <input
-          id="p-name"
-          data-testid="profile-name"
-          className={inputCls}
-          style={inputStyle}
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          autoFocus
-        />
-      </Field>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-        <Field label={tr('Fonction', 'Job title')} htmlFor="p-job">
-          <input
-            id="p-job"
-            className={inputCls}
-            style={inputStyle}
-            value={jobTitle}
-            onChange={(e) => setJobTitle(e.target.value)}
-            placeholder={tr('RSSI, DSI, Auditeur…', 'CISO, CIO, Auditor…')}
-          />
-        </Field>
-
-        <Field label={tr('Langue', 'Language')} htmlFor="p-lang">
-          <select
-            id="p-lang"
-            className={inputCls}
-            style={inputStyle}
-            value={language}
-            onChange={(e) => setLanguage(e.target.value as LocaleCode)}
-          >
-            <option value="fr">Français</option>
-            <option value="en">English</option>
-          </select>
-        </Field>
-      </div>
-
-      <Field
-        label={tr('Avatar (URL)', 'Avatar (URL)')}
-        hint={tr('Facultatif.', 'Optional.')}
-        htmlFor="p-avatar"
-      >
-        <input
-          id="p-avatar"
-          className={inputCls}
-          style={inputStyle}
-          value={avatarUrl}
-          onChange={(e) => setAvatarUrl(e.target.value)}
-          placeholder="https://…"
-        />
-      </Field>
-
-      <fieldset className="mt-2">
-        <legend className="text-[12.5px] font-semibold text-ink mb-2">
-          {tr('Comment souhaitez-vous être alerté ?', 'How should we alert you?')}
-        </legend>
-        {[
-          {
-            id: 'n-inapp',
-            checked: notifyInApp,
-            set: setNotifyInApp,
-            label: tr('Dans l’application', 'In-app'),
-          },
-          {
-            id: 'n-mail',
-            checked: notifyEmail,
-            set: setNotifyEmail,
-            label: tr('Par e-mail', 'By email'),
-          },
-        ].map((row) => (
-          <label
-            key={row.id}
-            htmlFor={row.id}
-            className="flex items-center gap-2.5 text-[13px] text-ink mb-2 cursor-pointer"
-          >
-            <input
-              id={row.id}
-              type="checkbox"
-              checked={row.checked}
-              onChange={(e) => row.set(e.target.checked)}
-              className="w-4 h-4"
-            />
-            {row.label}
-          </label>
-        ))}
-      </fieldset>
-    </StepShell>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 3. Goal — this is what selects the template that gets loaded
+// 2. Goal — this is what selects the template that gets loaded
 // ---------------------------------------------------------------------------
 
 export function GoalStep() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const stored = useStoredAnswers('goal');
-  const { go, busy } = useStepNav('goal');
+  const { go, busy, error, retry } = useStepNav('goal');
   const { data: suggestions } = useOnboardingSuggestions();
 
+  // #438 step 2: the objective filters, ON THE SAME SCREEN, eight pre-written
+  // statements of which the user picks three. The eight come from the server —
+  // they become REAL ROWS in this tenant's register, so the client never
+  // authors them and never posts their text back.
+  const { data: offer, isLoading: offerLoading } = useStarterRisks();
+  const adopt = useAdoptStarterRisks();
+
   const [goal, setGoal] = useState('');
-  useEffect(() => setGoal(str(stored, 'goal')), [stored]);
+  const [picked, setPicked] = useState<string[]>([]);
+  useEffect(() => {
+    setGoal(str(stored, 'goal'));
+    const storedPicks = stored.starter_risks;
+    if (Array.isArray(storedPicks)) {
+      setPicked(storedPicks.filter((k): k is string => typeof k === 'string'));
+    }
+  }, [stored]);
+
+  const pick = offer?.pick ?? 3;
+  const alreadyAdopted = offer?.already_adopted === true;
+  const enoughPicked = alreadyAdopted || picked.length === pick;
+
+  const toggle = (key: string) => {
+    setPicked((current) => {
+      if (current.includes(key)) return current.filter((k) => k !== key);
+      // Hard cap rather than a warning: the server refuses anything but three,
+      // and letting the user select a fourth only to be rejected on submit is a
+      // worse way to learn the rule.
+      if (current.length >= pick) return current;
+      return [...current, key];
+    });
+  };
+
+  const submit = (direction: 1 | -1) => {
+    // Forward means the statements become rows. Backwards never writes: going
+    // back to change the objective must not leave three risks behind.
+    if (direction === 1 && !alreadyAdopted && picked.length === pick) {
+      adopt.mutate(picked, {
+        onSuccess: () => go({ goal, starter_risks: picked }, 1),
+        // A 409 means this tenant already adopted — expected on a resumed
+        // tunnel, and not a reason to block the user on a screen they finished.
+        onError: (err: unknown) => {
+          if (isConflict(err)) go({ goal, starter_risks: picked }, 1);
+        },
+      });
+      return;
+    }
+    go({ goal, starter_risks: picked }, direction);
+  };
 
   return (
     <StepShell
@@ -501,11 +325,16 @@ export function GoalStep() {
         'Votre réponse décide des référentiels proposés à l’étape suivante et de votre écran d’arrivée.',
         'Your answer decides which frameworks come next and where you land.',
       )}
-      onBack={() => go({ goal }, -1)}
-      onNext={() => go({ goal }, 1)}
+      onBack={() => submit(-1)}
+      onNext={() => submit(1)}
       nextLabel={tr('Continuer', 'Continue')}
-      nextDisabled={!goal}
-      busy={busy}
+      nextDisabled={!goal || !enoughPicked}
+      busy={busy || adopt.isPending}
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
       <div className="flex flex-col gap-2.5">
         {(suggestions?.goals ?? []).map((g) => {
@@ -538,18 +367,189 @@ export function GoalStep() {
           );
         })}
       </div>
+
+      <StarterRiskPicker
+        offer={offer}
+        loading={offerLoading}
+        picked={picked}
+        pick={pick}
+        alreadyAdopted={alreadyAdopted}
+        onToggle={toggle}
+        failed={adopt.isError && !isConflict(adopt.error)}
+        lang={lang}
+        tr={tr}
+      />
     </StepShell>
   );
 }
 
+/**
+ * The eight statements, of which the user picks three (#438 step 2).
+ *
+ * Grouped by scope so a banker sees "typical of your sector" above "applies to
+ * any organisation" instead of eight cards in storage order — the ordering IS
+ * the value here, and it comes from the server.
+ *
+ * A pressed card is a toggle button, not a checkbox in a label, because the
+ * whole card is the hit target; `aria-pressed` is what tells a screen reader it
+ * is a two-state control.
+ */
+function StarterRiskPicker({
+  offer,
+  loading,
+  picked,
+  pick,
+  alreadyAdopted,
+  onToggle,
+  failed,
+  lang,
+  tr,
+}: {
+  offer: StarterRiskOffer | undefined;
+  loading: boolean;
+  picked: string[];
+  pick: number;
+  alreadyAdopted: boolean;
+  onToggle: (key: string) => void;
+  failed: boolean;
+  lang: LocaleCode;
+  tr: (fr: string, en: string) => string;
+}) {
+  const scopeLabel = (scope: string) =>
+    scope === 'sector'
+      ? tr('Typique de votre secteur', 'Typical of your sector')
+      : scope === 'region'
+        ? tr('Fréquent dans votre région', 'Common in your region')
+        : tr('Concerne toute organisation', 'Applies to any organisation');
+
+  if (loading) {
+    return (
+      <div className="mt-6 flex flex-col gap-2" aria-busy="true">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-14 rounded-[12px] or-skeleton" />
+        ))}
+      </div>
+    );
+  }
+
+  // There is deliberately no empty state: StarterRisksFor always returns eight,
+  // falling back to a generic sector. "Pick three of nothing" is a broken screen,
+  // not an empty one, so an absent offer means the request failed and says so.
+  if (!offer || offer.risks.length === 0) {
+    return (
+      <div className="mt-6 text-[13px] text-ink-soft" role="alert">
+        {tr(
+          'Les risques proposés n’ont pas pu être chargés. Vous pourrez les ajouter depuis le registre.',
+          'The suggested risks could not be loaded. You can add them from the register instead.',
+        )}
+      </div>
+    );
+  }
+
+  // Group headers computed BEFORE render rather than by mutating a variable
+  // inside the map: a reassignment that survives the render is exactly how a
+  // list starts showing the previous render's headings after a re-order.
+  const rows = offer.risks.map((risk, i) => ({
+    risk,
+    header: i === 0 || offer.risks[i - 1].scope !== risk.scope ? scopeLabel(risk.scope) : '',
+  }));
+
+  return (
+    <div className="mt-7">
+      <div className="flex items-baseline justify-between mb-2.5">
+        <h2 className="text-[14px] font-bold text-ink m-0">
+          {tr(`Sélectionnez ${pick} risques qui vous concernent`, `Pick ${pick} risks that apply to you`)}
+        </h2>
+        {/* aria-live so the count is announced as the user selects, which is how
+            a screen-reader user knows when the primary button will unlock. */}
+        <span className="text-[12.5px] font-semibold text-ink-soft" aria-live="polite">
+          {picked.length}/{pick}
+        </span>
+      </div>
+
+      {alreadyAdopted && (
+        <div className="text-[12.5px] text-ink-soft mb-3" data-testid="starter-already-adopted">
+          {tr(
+            'Ces risques ont déjà été ajoutés à votre registre — rien ne sera dupliqué.',
+            'These risks are already in your register — nothing will be duplicated.',
+          )}
+        </div>
+      )}
+
+      {failed && (
+        <div className="text-[12.5px] mb-3" role="alert" style={{ color: 'var(--high)' }}>
+          {tr(
+            'Les risques n’ont pas pu être ajoutés. Réessayez — vos choix sont conservés.',
+            'The risks could not be added. Try again — your picks are kept.',
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {rows.map(({ risk, header }) => {
+          const active = picked.includes(risk.key);
+          const atCap = !active && picked.length >= pick;
+
+          return (
+            <div key={risk.key}>
+              {header && (
+                <div className="text-[10.5px] uppercase tracking-wide text-ink-muted mt-3 mb-1.5">
+                  {header}
+                </div>
+              )}
+              <button
+                type="button"
+                data-testid={`starter-${risk.key}`}
+                onClick={() => onToggle(risk.key)}
+                aria-pressed={active}
+                disabled={alreadyAdopted || atCap}
+                className="w-full text-left rounded-[12px] p-3.5 flex items-start gap-3 disabled:opacity-55"
+                style={{
+                  background: active ? 'var(--accent-soft)' : 'var(--bg-elevated)',
+                  border: `1px solid ${active ? 'var(--accent)' : 'var(--border-strong)'}`,
+                }}
+              >
+                <span
+                  className="w-5 h-5 rounded shrink-0 mt-0.5 flex items-center justify-center"
+                  style={{
+                    border: `2px solid ${active ? 'var(--accent)' : 'var(--border-strong)'}`,
+                    background: active ? 'var(--accent)' : 'transparent',
+                    color: 'var(--fg-on-solid)',
+                  }}
+                >
+                  {active && <Check size={12} strokeWidth={3} />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] font-semibold text-ink">
+                    {i18n(risk.title_i18n, lang)}
+                  </span>
+                  <span className="block text-[12px] text-ink-soft mt-0.5">
+                    {i18n(risk.description_i18n, lang)}
+                  </span>
+                </span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** A 409 from the adoption endpoint means "already done", not "failed". */
+function isConflict(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } } | null)?.response?.status;
+  return status === 409;
+}
+
 // ---------------------------------------------------------------------------
-// 4. Framework — suggested from sector + country, one-click import
+// 3. Framework — suggested from sector + country, one-click import
 // ---------------------------------------------------------------------------
 
 export function FrameworkStep() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
-  const { go, busy } = useStepNav('framework');
+  const { go, busy, error, retry } = useStepNav('framework');
   const { data: suggestions, isLoading } = useOnboardingSuggestions();
   const { data: catalogs } = useCatalogs();
   const importCatalog = useImportCatalogAsFramework();
@@ -592,8 +592,13 @@ export function FrameworkStep() {
       )}
       onBack={() => go({ imported }, -1)}
       onNext={() => go({ imported }, 1)}
-      nextLabel={imported.length ? tr('Continuer', 'Continue') : tr('Plus tard', 'Later')}
+      nextLabel={tr('Continuer', 'Continue')}
       busy={busy}
+      error={error}
+      onRetry={retry}
+      errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
+      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      retryLabel={tr('Réessayer', 'Try again')}
     >
       {isLoading && (
         <div className="flex items-center gap-2 text-[13px] text-ink-soft">
@@ -657,131 +662,6 @@ export function FrameworkStep() {
             'Aucune suggestion pour ces réponses — vous pourrez choisir un référentiel depuis Conformité.',
             'No suggestion for these answers — you can pick a framework from Compliance.',
           )}
-        </div>
-      )}
-    </StepShell>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 5. Team — skippable, with a copyable share link
-// ---------------------------------------------------------------------------
-
-export function TeamStep() {
-  const lang = useUIStore((s) => s.lang);
-  const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
-  const navigate = useNavigate();
-  const stored = useStoredAnswers('team');
-  const save = useSaveOnboardingStep();
-  const complete = useCompleteOnboarding();
-  const { data: state } = useOnboardingState();
-
-  const [emails, setEmails] = useState('');
-  useEffect(() => setEmails(str(stored, 'emails')), [stored]);
-
-  const shareLink = `${window.location.origin}/register`;
-
-  const finish = () => {
-    // Save the answers, then lift the guard. The invitations themselves are sent
-    // from Settings › Members, which owns roles and permissions — duplicating
-    // that flow here would mean two places to keep correct.
-    save.mutate(
-      { step: 'team', answers: { emails } },
-      {
-        onSettled: () =>
-          complete.mutate(undefined, {
-            onSuccess: (s) => navigate(s.landing || '/'),
-            onError: () =>
-              toast.error(
-                tr(
-                  'Impossible de terminer la configuration. Réessayez.',
-                  'Could not finish setup. Try again.',
-                ),
-              ),
-          }),
-      },
-    );
-  };
-
-  const busy = save.isPending || complete.isPending;
-
-  return (
-    <StepShell
-      title={tr('Invitez votre équipe', 'Invite your team')}
-      subtitle={tr(
-        'Facultatif — vous pouvez commencer seul et inviter plus tard.',
-        'Optional — you can start alone and invite later.',
-      )}
-      onBack={() => {
-        save.mutate({ step: 'team', answers: { emails }, next: 'framework' });
-        navigate(stepPath('framework'));
-      }}
-      onNext={finish}
-      nextLabel={tr('Terminer', 'Finish')}
-      busy={busy}
-      secondary={
-        <button
-          type="button"
-          data-testid="wizard-skip"
-          onClick={finish}
-          disabled={busy}
-          className="h-11 px-4 rounded-[10px] text-[13.5px] font-semibold text-ink-soft"
-          style={{ background: 'transparent' }}
-        >
-          {tr('Passer cette étape', 'Skip this step')}
-        </button>
-      }
-    >
-      <Field
-        label={tr('Adresses e-mail', 'Email addresses')}
-        hint={tr(
-          'Une par ligne. Nous préparons la liste ; les invitations partent depuis Paramètres › Membres, où vous choisissez le rôle de chacun.',
-          'One per line. We keep the list; invitations are sent from Settings › Members, where you pick each person’s role.',
-        )}
-        htmlFor="team-emails"
-      >
-        <textarea
-          id="team-emails"
-          data-testid="team-emails"
-          className="w-full px-3.5 py-2.5 rounded-[10px] text-[14px] text-ink outline-none min-h-[96px]"
-          style={inputStyle}
-          value={emails}
-          onChange={(e) => setEmails(e.target.value)}
-          placeholder={'awa@exemple.cm\nmoussa@exemple.cm'}
-        />
-      </Field>
-
-      <div
-        className="rounded-[12px] p-4 flex items-center gap-3"
-        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)' }}
-      >
-        <Users size={18} style={{ color: 'var(--accent-500)' }} />
-        <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-semibold text-ink">
-            {tr('Lien de partage', 'Share link')}
-          </div>
-          <div className="text-[12px] text-ink-soft truncate mono">{shareLink}</div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard
-              ?.writeText(shareLink)
-              .then(() => toast.success(tr('Lien copié', 'Link copied')))
-              .catch(() => toast.error(tr('Copie impossible', 'Copy failed')));
-          }}
-          className="h-9 px-3 rounded-[9px] text-[12.5px] font-semibold text-ink inline-flex items-center gap-1.5 shrink-0"
-          style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-strong)' }}
-        >
-          <Copy size={14} />
-          {tr('Copier', 'Copy')}
-        </button>
-      </div>
-
-      {state?.goal && (
-        <div className="text-[12.5px] text-ink-muted mt-4">
-          {tr('Vous arriverez sur ', 'You will land on ')}
-          <span className="mono">{state.landing}</span>.
         </div>
       )}
     </StepShell>

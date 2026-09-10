@@ -412,5 +412,103 @@
     "deleted": "{n} {entity} supprimées",
     "changesTitle": "Ce qui change",
     "changesMore": "…et {n} de plus."
+  },
+  "onboarding": {
+    "tunnel": {
+      "title": "Configurons OpenRisk pour votre organisation",
+      "stepOf": "Étape {current} sur {total}",
+      "continue": "Continuer",
+      "saving": "Enregistrement…",
+      "saveFailed": "Impossible d'enregistrer cette étape.",
+      "retry": "Réessayer",
+      "answersKept": "Vos réponses sont conservées — réessayez, rien n'est perdu.",
+      "loading": "Chargement de votre configuration…",
+      "loadFailed": "Impossible de charger votre configuration.",
+      "organization": {
+        "heading": "Votre organisation",
+        "lead": "Le secteur et le pays déterminent le référentiel que nous vous proposons.",
+        "sector": "Secteur",
+        "country": "Pays",
+        "returns": "{count} contrôles dans le référentiel correspondant",
+        "returnsNone": "Aucun référentiel régional ne correspond — ISO 27001 servira de base."
+      },
+      "goal": {
+        "heading": "Votre objectif",
+        "lead": "Nous en déduisons les risques à vous proposer en premier.",
+        "pickThree": "Sélectionnez trois risques qui vous concernent",
+        "picked": "{count} sur 3 sélectionnés",
+        "sectorScope": "Typique de votre secteur",
+        "regionScope": "Fréquent dans votre région",
+        "genericScope": "Concerne toute organisation"
+      },
+      "framework": {
+        "heading": "Votre référentiel",
+        "lead": "Confirmez la proposition ou choisissez-en un autre.",
+        "importing": "Import en cours…",
+        "imported": "{count} contrôles importés",
+        "importFailed": "L'import a échoué. Vous pouvez continuer et l'importer plus tard."
+      },
+      "score": {
+        "heading": "Évaluez ce risque",
+        "lead": "Probabilité et impact — la matrice se met à jour en direct.",
+        "probability": "Probabilité",
+        "impact": "Impact",
+        "cell": "Score {score}, niveau {level}"
+      },
+      "cover": {
+        "heading": "Couvrez ce risque",
+        "lead": "Acceptez le contrôle proposé et regardez le risque résiduel baisser.",
+        "accept": "Accepter ce contrôle",
+        "inherent": "Risque inhérent",
+        "residual": "Risque résiduel",
+        "reduction": "Réduction de {value}"
+      }
+    },
+    "posture": {
+      "title": "Votre posture",
+      "lead": "Tout ce qui suit est calculé à partir de vos propres données.",
+      "riskCount": "{count} risques dans votre registre",
+      "coverage": "{percent} de couverture",
+      "coverageDetail": "{implemented} contrôles mis en œuvre sur {applicable} applicables",
+      "topRisks": "Vos expositions les plus fortes",
+      "inherent": "Inhérent",
+      "residual": "Résiduel",
+      "noResidual": "Aucun contrôle rattaché — le résiduel égale l'inhérent.",
+      "formulaVersion": "Formule {version}",
+      "loading": "Calcul de votre posture…",
+      "empty": {
+        "heading": "Rien à révéler pour l'instant",
+        "body": "Votre posture se calcule à partir de vos risques et de vos contrôles. Il en manque encore.",
+        "action": "Reprendre la configuration"
+      },
+      "error": {
+        "heading": "Impossible de calculer votre posture",
+        "body": "Aucune donnée n'a été enregistrée et aucune mesure n'a été prise. Réessayez.",
+        "action": "Réessayer"
+      },
+      "invite": {
+        "heading": "Invitez votre équipe",
+        "body": "Partagez ce lien. Les rôles se choisissent dans Paramètres › Membres.",
+        "copy": "Copier le lien",
+        "copied": "Copié"
+      }
+    },
+    "recognition": {
+      "title": "Ce qu'OpenRisk sait déjà de vous",
+      "lead": "Votre organisation était déjà configurée. Voici ce que nous avons trouvé dans vos données.",
+      "risks": "risques",
+      "frameworks": "référentiels",
+      "controls": "contrôles",
+      "assets": "actifs",
+      "members": "membres",
+      "action": "Voir ma posture",
+      "loading": "Lecture de vos données…",
+      "error": "Impossible de lire vos données."
+    },
+    "checklist": {
+      "close": "Masquer la liste de démarrage",
+      "closed": "Liste masquée. Vous la retrouverez dans les réglages.",
+      "reopen": "Afficher la liste de démarrage"
+    }
   }
 }

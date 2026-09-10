@@ -412,5 +412,103 @@
     "deleted": "{n} {entity} deleted",
     "changesTitle": "What changes",
     "changesMore": "…and {n} more."
+  },
+  "onboarding": {
+    "tunnel": {
+      "title": "Let's set OpenRisk up for your organisation",
+      "stepOf": "Step {current} of {total}",
+      "continue": "Continue",
+      "saving": "Saving…",
+      "saveFailed": "This step could not be saved.",
+      "retry": "Try again",
+      "answersKept": "Your answers are kept — try again, nothing is lost.",
+      "loading": "Loading your setup…",
+      "loadFailed": "Your setup could not be loaded.",
+      "organization": {
+        "heading": "Your organisation",
+        "lead": "Your sector and country decide which framework we propose.",
+        "sector": "Sector",
+        "country": "Country",
+        "returns": "{count} controls in the matching framework",
+        "returnsNone": "No regional framework matches — ISO 27001 will serve as the baseline."
+      },
+      "goal": {
+        "heading": "Your objective",
+        "lead": "It decides which risks we put in front of you first.",
+        "pickThree": "Pick three risks that apply to you",
+        "picked": "{count} of 3 selected",
+        "sectorScope": "Typical of your sector",
+        "regionScope": "Common in your region",
+        "genericScope": "Applies to any organisation"
+      },
+      "framework": {
+        "heading": "Your framework",
+        "lead": "Confirm the proposal or choose another.",
+        "importing": "Importing…",
+        "imported": "{count} controls imported",
+        "importFailed": "The import failed. You can continue and import it later."
+      },
+      "score": {
+        "heading": "Score this risk",
+        "lead": "Likelihood and impact — the matrix updates as you go.",
+        "probability": "Likelihood",
+        "impact": "Impact",
+        "cell": "Score {score}, level {level}"
+      },
+      "cover": {
+        "heading": "Cover this risk",
+        "lead": "Accept the proposed control and watch the residual risk fall.",
+        "accept": "Accept this control",
+        "inherent": "Inherent risk",
+        "residual": "Residual risk",
+        "reduction": "Down by {value}"
+      }
+    },
+    "posture": {
+      "title": "Your posture",
+      "lead": "Everything below is computed from your own data.",
+      "riskCount": "{count} risks in your register",
+      "coverage": "{percent} coverage",
+      "coverageDetail": "{implemented} controls implemented of {applicable} applicable",
+      "topRisks": "Your largest exposures",
+      "inherent": "Inherent",
+      "residual": "Residual",
+      "noResidual": "No control mapped — the residual equals the inherent score.",
+      "formulaVersion": "Formula {version}",
+      "loading": "Computing your posture…",
+      "empty": {
+        "heading": "Nothing to reveal yet",
+        "body": "Your posture is computed from your risks and your controls. Some are still missing.",
+        "action": "Resume setup"
+      },
+      "error": {
+        "heading": "Your posture could not be computed",
+        "body": "Nothing was recorded and nothing was measured. Try again.",
+        "action": "Try again"
+      },
+      "invite": {
+        "heading": "Invite your team",
+        "body": "Share this link. Roles are chosen in Settings › Members.",
+        "copy": "Copy link",
+        "copied": "Copied"
+      }
+    },
+    "recognition": {
+      "title": "What OpenRisk already knows about you",
+      "lead": "Your organisation was already configured. Here is what we found in your own data.",
+      "risks": "risks",
+      "frameworks": "frameworks",
+      "controls": "controls",
+      "assets": "assets",
+      "members": "members",
+      "action": "See my posture",
+      "loading": "Reading your data…",
+      "error": "Your data could not be read."
+    },
+    "checklist": {
+      "close": "Hide the getting-started list",
+      "closed": "List hidden. You will find it again in settings.",
+      "reopen": "Show the getting-started list"
+    }
   }
 }
