@@ -23,6 +23,8 @@ import {
   type OnboardingStepKey,
   type PostureSummary,
   type Recognition,
+  type StarterRiskOffer,
+  type AdoptStarterRisksResult,
 } from '../../services/activationService';
 import { confetti } from '../../shared/celebrate';
 
@@ -32,6 +34,7 @@ export const ONBOARDING_QUERY_KEY = ['onboarding', 'state'];
 export const ONBOARDING_SUGGESTIONS_KEY = ['onboarding', 'suggestions'];
 export const POSTURE_QUERY_KEY = ['posture'];
 export const RECOGNITION_QUERY_KEY = ['onboarding', 'recognition'];
+export const STARTER_RISKS_QUERY_KEY = ['onboarding', 'starter-risks'];
 
 /** The activation checklist, straight from the server. */
 export function useActivationState(enabled = true) {
@@ -143,6 +146,9 @@ export function useSaveOnboardingStep() {
       // The profile step completes a checklist row server-side.
       void qc.invalidateQueries({ queryKey: ACTIVATION_QUERY_KEY });
       void qc.invalidateQueries({ queryKey: ONBOARDING_SUGGESTIONS_KEY });
+      // The starter set is scoped by the sector and country step 1 stores, so a
+      // saved step can change which eight statements step 2 must offer.
+      void qc.invalidateQueries({ queryKey: STARTER_RISKS_QUERY_KEY });
     },
   });
 }
@@ -204,6 +210,42 @@ export function useRecognition(enabled = true) {
     queryFn: () => activationService.getRecognition(),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+/** The eight statements step 2 renders, scoped by the stored sector/country. */
+export function useStarterRisks(enabled = true) {
+  return useQuery<StarterRiskOffer>({
+    queryKey: STARTER_RISKS_QUERY_KEY,
+    queryFn: () => activationService.getStarterRisks(),
+    enabled,
+    // The set only changes when the sector or country does, and both are saved
+    // one step earlier. The step-1 save invalidates this key.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Adopt the three chosen statements.
+ *
+ * `retry: false` on purpose. This WRITES REAL ROWS into a customer's register:
+ * an automatic retry over a request whose failure mode is ambiguous (did the
+ * server write before it timed out?) is how a register ends up with six rows
+ * instead of three. The server's own idempotence guard answers 409 on a genuine
+ * second attempt, and the caller treats that as success.
+ */
+export function useAdoptStarterRisks() {
+  const qc = useQueryClient();
+  return useMutation<AdoptStarterRisksResult, unknown, string[]>({
+    mutationFn: (keys: string[]) => activationService.adoptStarterRisks(keys),
+    retry: false,
+    onSuccess: () => {
+      // New risks exist now: the checklist's first_risk row, the offer's
+      // already_adopted flag and the posture all move.
+      void qc.invalidateQueries({ queryKey: ACTIVATION_QUERY_KEY });
+      void qc.invalidateQueries({ queryKey: STARTER_RISKS_QUERY_KEY });
+      void qc.invalidateQueries({ queryKey: POSTURE_QUERY_KEY });
+    },
   });
 }
 

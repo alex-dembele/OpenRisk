@@ -428,7 +428,7 @@ func TestWizard_SaveIsResumableAndReversible(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveStep: %v", err)
 	}
-	if state.CurrentStep != string(domain.OnboardingStepProfile) {
+	if state.CurrentStep != string(domain.OnboardingStepGoal) {
 		t.Errorf("saving a step advances the cursor, got %q", state.CurrentStep)
 	}
 	if state.Industry != "banking" || state.Country != "CM" {
@@ -444,8 +444,8 @@ func TestWizard_SaveIsResumableAndReversible(t *testing.T) {
 
 	// Back-navigation is allowed: fixing a typo is not an error.
 	back, err := uc.SaveStep(ctx, tenant, user, SaveStepInput{
-		Step:    domain.OnboardingStepProfile,
-		Answers: domain.JSONMap{"full_name": "Awa"},
+		Step:    domain.OnboardingStepGoal,
+		Answers: domain.JSONMap{"goal": "pass_audit"},
 		Next:    string(domain.OnboardingStepOrganization),
 	})
 	if err != nil {
@@ -498,15 +498,21 @@ func TestWizard_OrganizationWriteRequiresPermission(t *testing.T) {
 	}
 }
 
-// The profile step is a checklist step: completing it records ONE server event.
-func TestWizard_ProfileStepRecordsActivation(t *testing.T) {
+// `profile` is still a CHECKLIST step with its own event key — #438 retired its
+// WIZARD ROUTE, not the milestone. The event is now recorded from the
+// organization step, which absorbed the question, and it must still tick exactly
+// one row.
+func TestWizard_OrganizationStepRecordsTheProfileMilestone(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newWizard(repo)
 	tenant, user := uuid.New(), uuid.New()
 
 	_, err := uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
-		Step:    domain.OnboardingStepProfile,
-		Answers: domain.JSONMap{"full_name": "Awa", "job_title": "RSSI"},
+		Step: domain.OnboardingStepOrganization,
+		Answers: domain.JSONMap{
+			"name": "Banque Atlantique", "industry": "banking", "country": "CM",
+			"full_name": "Awa", "job_title": "RSSI",
+		},
 	})
 	if err != nil {
 		t.Fatalf("SaveStep: %v", err)
@@ -514,10 +520,31 @@ func TestWizard_ProfileStepRecordsActivation(t *testing.T) {
 
 	state, _ := NewGetStateUseCase(repo).Execute(context.Background(), tenant, user)
 	if !stepByKey(t, state, "profile").Completed {
-		t.Error("completing the profile step must tick the profile checklist row")
+		t.Error("giving a name in the organization step must tick the profile checklist row")
 	}
 	if len(completedKeys(state)) != 1 {
 		t.Errorf("it must tick that row only, got %v", completedKeys(state))
+	}
+}
+
+// And the milestone is NOT recorded for a company-only answer: a step that ticks
+// "you completed your profile" when no person was named is the class of untruth
+// the whole activation rewrite exists to remove.
+func TestWizard_OrganizationWithoutAPersonDoesNotTickProfile(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newWizard(repo)
+	tenant, user := uuid.New(), uuid.New()
+
+	if _, err := uc.SaveStep(context.Background(), tenant, user, SaveStepInput{
+		Step:    domain.OnboardingStepOrganization,
+		Answers: domain.JSONMap{"name": "Banque Atlantique", "industry": "banking"},
+	}); err != nil {
+		t.Fatalf("SaveStep: %v", err)
+	}
+
+	state, _ := NewGetStateUseCase(repo).Execute(context.Background(), tenant, user)
+	if stepByKey(t, state, "profile").Completed {
+		t.Error("no name was given; the profile row must not tick")
 	}
 }
 

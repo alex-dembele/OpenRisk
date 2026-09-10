@@ -16,7 +16,8 @@
 // composed, not a grid of identical cards.
 
 import { useNavigate } from 'react-router';
-import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, ArrowRight, Check, Copy, Users } from 'lucide-react';
 
 import { useI18n } from '../../hooks/useI18n';
 import type { PostureRiskView, PostureSummary } from '../../services/activationService';
@@ -89,10 +90,70 @@ function PostureReveal({ summary }: { summary: PostureSummary }) {
         </ul>
       </section>
 
+      <InviteBlock />
+
       <p className="text-[11.5px] text-ink-muted mt-6 m-0">
         {t('onboarding.posture.formulaVersion', { version: summary.residual_formula_version })}
       </p>
     </div>
+  );
+}
+
+/**
+ * Team invitations, on the reveal (#438).
+ *
+ * They used to be the tunnel's last step, which asked people to invite
+ * colleagues to look at nothing. Here they sit under a posture the user can
+ * actually forward, which is the moment the invitation means something.
+ *
+ * NOTE ON THE DESIGN SYSTEM: the issue says to reuse `TagInput` for this. No
+ * such component exists in `shared/` — this is recorded rather than silently
+ * worked around. A textarea keeps the shape the retired team step used; when the
+ * design system grows a real `TagInput`, this is the call site to migrate.
+ *
+ * Nothing is SENT from here. Invitations carry roles and permissions, which
+ * Settings › Members owns; duplicating that flow would mean two places to keep
+ * correct.
+ */
+function InviteBlock() {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const shareLink = `${window.location.origin}/register`;
+
+  const copy = () => {
+    void navigator.clipboard?.writeText(shareLink).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <section
+      className="mt-8 rounded-xl p-5 flex flex-wrap items-center gap-4"
+      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+      aria-labelledby="posture-invite"
+      data-testid="posture-invite"
+    >
+      <Users size={18} aria-hidden="true" style={{ color: 'var(--accent-500)' }} />
+      <div className="flex-1 min-w-[220px]">
+        <h2 id="posture-invite" className="text-[13.5px] font-semibold text-ink m-0">
+          {t('onboarding.posture.invite.heading')}
+        </h2>
+        <p className="text-[12px] text-ink-soft mt-0.5 m-0">
+          {t('onboarding.posture.invite.body')}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={copy}
+        data-testid="posture-invite-copy"
+        className="h-9 px-3.5 rounded-lg text-[12.5px] font-semibold inline-flex items-center gap-1.5 shrink-0"
+        style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-strong)' }}
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />}
+        {copied ? t('onboarding.posture.invite.copied') : t('onboarding.posture.invite.copy')}
+      </button>
+    </section>
   );
 }
 

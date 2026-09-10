@@ -33,6 +33,15 @@ import "sort"
 // number is a UI contract, not an arbitrary truncation.
 const EightStarterRisks = 8
 
+// StarterRiskPickCount is how many of the eight the user adopts.
+//
+// Three, and the number is deliberate rather than round: one statement is a
+// demo, eight is a data-entry chore, and three is enough for the Posture Reveal
+// to show a distribution rather than a single dot. The server enforces it —
+// a client that could adopt eight would fill a register the customer never
+// reviewed.
+const StarterRiskPickCount = 3
+
 // StarterRisk is one pre-written risk statement the user may adopt.
 //
 // Probability is on [0,1] and Impact on [0,10] — the Score Engine's own scales,
