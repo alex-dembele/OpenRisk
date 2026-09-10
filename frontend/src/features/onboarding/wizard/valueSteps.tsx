@@ -22,11 +22,9 @@ import { StepShell } from './stepPrimitives';
 import { num, useStepNav, useStoredAnswers } from './stepNav';
 import {
   useCompleteOnboarding,
-  usePosture,
   usePrefersReducedMotion,
   useSaveOnboardingStep,
 } from '../useActivation';
-import type { PostureRiskView } from '../../../services/activationService';
 
 // ---------------------------------------------------------------------------
 // The matrix
@@ -300,18 +298,32 @@ export function CoverStep() {
   const save = useSaveOnboardingStep();
   const complete = useCompleteOnboarding();
 
-  // The posture is read here so the residual shown is the REAL one, computed by
-  // the server from this tenant's own control mappings (ADR 0003). A number
-  // invented client-side would be the placeholder criterion 7 forbids, on the
-  // screen the whole tunnel builds towards.
-  const { data: posture, isLoading } = usePosture();
+  // DELIBERATELY DOES NOT FETCH /posture.
+  //
+  // It used to, so the card could show a server-computed residual. But GET
+  // /posture is what records `posture.revealed` — the Aha moment itself (D-010)
+  // — so fetching it here fired the Aha one step early: the metric behind the
+  // eight-minute promise was measured before the user had seen anything, and
+  // `first_reveal` was already false by the time the reveal mounted, so the
+  // reveal never celebrated.
+  //
+  // The screen therefore shows the score the user just set in step 4, which it
+  // owns, and says plainly that the residual is computed on the next screen.
+  // Nothing here is invented: the number comes from their own answers.
+  const scored = useStoredAnswers('score');
   const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
     setAccepted(stored.accepted === true);
   }, [stored]);
 
-  const risk: PostureRiskView | undefined = useMemo(() => posture?.top_risks?.[0], [posture]);
+  // Score Engine arithmetic on the user's own step-4 answers: P × I. Asset
+  // criticality is the engine's third factor and is not known at this point,
+  // which the step-4 copy already says.
+  const inherent = useMemo(
+    () => Math.round(num(scored, 'probability', 0) * num(scored, 'impact', 0) * 100) / 100,
+    [scored],
+  );
 
   /**
    * Save, then lift the guard, then land on the reveal.
@@ -351,26 +363,7 @@ export function CoverStep() {
       )}
       retryLabel={tr('Réessayer', 'Try again')}
     >
-      {isLoading && <div className="h-28 rounded-xl or-skeleton" />}
-
-      {/* The degraded case the DoD names: the posture is not computable yet
-          (no framework imported, or the import failed). The step still works —
-          it stores the acceptance — and says plainly that the number is not
-          available rather than showing a zero that would read as "no risk". */}
-      {!isLoading && !risk && (
-        <div
-          className="rounded-xl p-4 text-[13px] text-ink-soft"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)' }}
-          data-testid="cover-unavailable"
-        >
-          {tr(
-            'Le résiduel sera calculé dès qu’un référentiel sera importé — nous vous le montrerons à l’écran suivant.',
-            'The residual is computed as soon as a framework is imported — we will show it on the next screen.',
-          )}
-        </div>
-      )}
-
-      {!isLoading && risk && <ResidualCard risk={risk} accepted={accepted} tr={tr} />}
+      <InherentCard inherent={inherent} tr={tr} />
 
       <label
         className="mt-5 flex items-start gap-3 cursor-pointer"
@@ -394,62 +387,33 @@ export function CoverStep() {
   );
 }
 
-function ResidualCard({
-  risk,
-  accepted,
-  tr,
-}: {
-  risk: PostureRiskView;
-  accepted: boolean;
-  tr: (fr: string, en: string) => string;
-}) {
-  const reduced = usePrefersReducedMotion();
-
-  // Both numbers come from the server. `accepted` only decides WHICH of the two
-  // the screen leads with — it never computes one. The user is being shown what
-  // their controls have already earned, not a projection.
-  const shown = accepted ? risk.residual.value : risk.residual.inherent;
-  const band = bandOf(shown);
-
+/**
+ * What the user has, and what comes next.
+ *
+ * No residual number here: computing one would need the tenant's control
+ * mappings, and the only endpoint that returns them is the reveal — which
+ * records the Aha. Showing a client-computed figure instead would be the
+ * placeholder criterion 7 forbids, on the screen that leads into the reveal.
+ */
+function InherentCard({ inherent, tr }: { inherent: number; tr: (fr: string, en: string) => string }) {
   return (
     <div
       className="rounded-xl p-5"
       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
       data-testid="cover-residual"
     >
-      <div className="text-[13.5px] font-semibold text-ink mb-3 truncate">{risk.title}</div>
-
       <div className="flex items-end gap-5">
-        <Figure label={tr('Inhérent', 'Inherent')} value={risk.residual.inherent} muted />
-        <ShieldCheck
-          size={18}
-          aria-hidden="true"
-          style={{ color: accepted ? 'var(--low)' : 'var(--fg-muted)', marginBottom: 6 }}
-        />
-        <Figure
-          label={tr('Résiduel', 'Residual')}
-          value={shown}
-          color={bandColor(band)}
-          testId="cover-residual-value"
-          reduced={reduced}
-        />
+        <Figure label={tr('Inhérent', 'Inherent')} value={inherent} />
+        <ShieldCheck size={18} aria-hidden="true" style={{ color: 'var(--fg-muted)', marginBottom: 6 }} />
+        <div>
+          <div className="text-[10.5px] uppercase tracking-wide text-ink-muted">
+            {tr('Résiduel', 'Residual')}
+          </div>
+          <div className="text-[13px] text-ink-soft mt-1" data-testid="cover-residual-pending">
+            {tr('calculé à l’écran suivant', 'computed on the next screen')}
+          </div>
+        </div>
       </div>
-
-      {risk.residual.coverage.measured ? (
-        <div className="text-[12px] text-ink-soft mt-3" role="status" aria-live="polite">
-          {tr(
-            `${risk.residual.coverage.applicable} contrôle(s) rattaché(s) — réduction de ${risk.residual.reduction}`,
-            `${risk.residual.coverage.applicable} control(s) mapped — down by ${risk.residual.reduction}`,
-          )}
-        </div>
-      ) : (
-        <div className="text-[12px] text-ink-muted mt-3">
-          {tr(
-            'Aucun contrôle rattaché pour l’instant — le résiduel égale l’inhérent.',
-            'No control mapped yet — the residual equals the inherent score.',
-          )}
-        </div>
-      )}
     </div>
   );
 }
