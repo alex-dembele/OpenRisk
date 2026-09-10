@@ -14,13 +14,18 @@
 // (criterion 13) — not a shorter animation, no animation.
 
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { ShieldCheck } from 'lucide-react';
 
 import { useUIStore } from '../../../store/uiStore';
-import { useAuthStore } from '../../../hooks/useAuthStore';
 import { StepShell } from './stepPrimitives';
 import { num, useStepNav, useStoredAnswers } from './stepNav';
-import { usePosture, usePrefersReducedMotion } from '../useActivation';
+import {
+  useCompleteOnboarding,
+  usePosture,
+  usePrefersReducedMotion,
+  useSaveOnboardingStep,
+} from '../useActivation';
 import type { PostureRiskView } from '../../../services/activationService';
 
 // ---------------------------------------------------------------------------
@@ -283,8 +288,17 @@ export function CoverStep() {
   const lang = useUIStore((s) => s.lang);
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const stored = useStoredAnswers('cover');
-  const { go, busy, error, retry } = useStepNav('cover');
-  const user = useAuthStore((s) => s.user);
+  const { go, busy: navBusy, error: navError } = useStepNav('cover');
+  const navigate = useNavigate();
+
+  // `cover` is the LAST step, so it does not merely advance a cursor: it is the
+  // only place that can lift the route guard. Without the complete call the
+  // tunnel has no exit — and because OnboardingGuard denies /app until
+  // onboarding.completed is true, a user who reaches this screen is locked out
+  // of the product entirely. That is the failure #438's own Risk section warns
+  // about, and it is why this step does not use `go(..., 1)` like the others.
+  const save = useSaveOnboardingStep();
+  const complete = useCompleteOnboarding();
 
   // The posture is read here so the residual shown is the REAL one, computed by
   // the server from this tenant's own control mappings (ADR 0003). A number
@@ -299,6 +313,24 @@ export function CoverStep() {
 
   const risk: PostureRiskView | undefined = useMemo(() => posture?.top_risks?.[0], [posture]);
 
+  /**
+   * Save, then lift the guard, then land on the reveal.
+   *
+   * `onSuccess`, not `onSettled`: completing after a failed save would lift the
+   * guard on an answer that was never stored. And the tunnel ends on /posture
+   * because that is the whole point of #438 — five screens collected facts, and
+   * this is the screen that returns something computed in exchange.
+   */
+  const finish = () => {
+    save.mutate(
+      { step: 'cover', answers: { accepted } },
+      { onSuccess: () => complete.mutate(undefined, { onSuccess: () => navigate('/posture') }) },
+    );
+  };
+
+  const busy = navBusy || save.isPending || complete.isPending;
+  const error = navError || save.isError || complete.isError;
+
   return (
     <StepShell
       title={tr('Couvrez ce risque', 'Cover this risk')}
@@ -307,11 +339,11 @@ export function CoverStep() {
         'Accept the proposed control: the residual risk is recomputed from your own controls.',
       )}
       onBack={() => go({ accepted }, -1)}
-      onNext={() => go({ accepted, by: user?.id ?? '' }, 1)}
+      onNext={finish}
       nextLabel={tr('Voir ma posture', 'See my posture')}
       busy={busy}
       error={error}
-      onRetry={retry}
+      onRetry={finish}
       errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
       errorHint={tr(
         'Vos réponses sont conservées — réessayez, rien n’est perdu.',

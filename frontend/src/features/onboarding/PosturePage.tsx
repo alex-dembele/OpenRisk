@@ -21,7 +21,7 @@ import { AlertTriangle, ArrowRight, Check, Copy, Users } from 'lucide-react';
 
 import { useI18n } from '../../hooks/useI18n';
 import type { PostureRiskView, PostureSummary } from '../../services/activationService';
-import { usePosture, useCountUp, usePrefersReducedMotion } from './useActivation';
+import { useOnboardingState, usePosture, useCountUp, usePrefersReducedMotion } from './useActivation';
 
 export function PosturePage() {
   const { t } = useI18n();
@@ -90,12 +90,41 @@ function PostureReveal({ summary }: { summary: PostureSummary }) {
         </ul>
       </section>
 
+      <LandingCta />
+
       <InviteBlock />
 
       <p className="text-[11.5px] text-ink-muted mt-6 m-0">
         {t('onboarding.posture.formulaVersion', { version: summary.residual_formula_version })}
       </p>
     </div>
+  );
+}
+
+/**
+ * The way out of the reveal.
+ *
+ * The tunnel now ends here rather than on the goal's landing screen, so this is
+ * where `landing` is offered — a reveal with no forward control is a dead end,
+ * and the user has just been told something worth acting on.
+ */
+function LandingCta() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const { data: onboarding } = useOnboardingState();
+  const landing = onboarding?.landing || '/';
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(landing)}
+      data-testid="posture-continue"
+      className="mt-8 px-5 py-2.5 rounded-lg text-[13.5px] font-semibold inline-flex items-center gap-2"
+      style={{ background: 'var(--accent-solid)', color: 'var(--fg-on-solid)' }}
+    >
+      {t('onboarding.posture.continue')}
+      <ArrowRight size={15} aria-hidden="true" />
+    </button>
   );
 }
 

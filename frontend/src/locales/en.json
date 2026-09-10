@@ -491,7 +491,8 @@
         "body": "Share this link. Roles are chosen in Settings › Members.",
         "copy": "Copy link",
         "copied": "Copied"
-      }
+      },
+      "continue": "Continue into OpenRisk"
     },
     "recognition": {
       "title": "What OpenRisk already knows about you",
