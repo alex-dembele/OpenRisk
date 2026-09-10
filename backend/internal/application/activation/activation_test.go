@@ -10,8 +10,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/opendefender/openrisk/internal/domain"
+	"github.com/opendefender/openrisk/pkg/monitoring"
 )
 
 // ---------------------------------------------------------------------------
@@ -307,6 +311,74 @@ func TestMaybeRecordAha_OncePerTenant(t *testing.T) {
 	if count != 1 {
 		t.Errorf("aha recorded %d times, want exactly 1", count)
 	}
+}
+
+// D-010's carried-forward defect, proved at the call site: the tenant is counted
+// when the Aha is recorded, even though no signup row exists to measure a
+// duration against. Before this change the increment lived inside
+// ObserveTimeToAha and this tenant vanished from the activation rate.
+func TestMaybeRecordAha_CountsATenantWithNoSignupAnchor(t *testing.T) {
+	repo := newFakeRepo()
+	tenant := uuid.New()
+	ctx := context.Background()
+
+	countBefore := testutil.ToFloat64(monitoring.AhaReachedTotal)
+	v1Before := ahaObservations(t, monitoring.AhaDefinitionV1)
+
+	NewAhaRecorder(repo).MaybeRecordAha(ctx, tenant, true, 3, 7)
+
+	if has, _ := repo.HasEvent(ctx, tenant, domain.ActivationAhaReached); !has {
+		t.Fatal("the aha event must be recorded with or without a signup anchor")
+	}
+	if got := testutil.ToFloat64(monitoring.AhaReachedTotal) - countBefore; got != 1 {
+		t.Errorf("aha_reached_total moved by %v, want 1", got)
+	}
+	if got := ahaObservations(t, monitoring.AhaDefinitionV1) - v1Before; got != 0 {
+		t.Errorf("a duration was observed with no signup anchor: +%d", got)
+	}
+}
+
+// The executive-dashboard Aha is the v1 definition and stays there: the Posture
+// Reveal will observe v2 from its own call site (D-010).
+func TestMaybeRecordAha_ObservesTheV1Definition(t *testing.T) {
+	repo := newFakeRepo()
+	tenant := uuid.New()
+	ctx := context.Background()
+	repo.events = append(repo.events, domain.ActivationEvent{
+		TenantID:   tenant,
+		EventKey:   domain.ActivationSignup,
+		OccurredAt: time.Now().UTC().Add(-6 * time.Minute),
+	})
+
+	v1Before := ahaObservations(t, monitoring.AhaDefinitionV1)
+	v2Before := ahaObservations(t, monitoring.AhaDefinitionV2)
+
+	NewAhaRecorder(repo).MaybeRecordAha(ctx, tenant, true, 3, 7)
+
+	if got := ahaObservations(t, monitoring.AhaDefinitionV1) - v1Before; got != 1 {
+		t.Errorf("v1 gained %d observations, want 1", got)
+	}
+	if got := ahaObservations(t, monitoring.AhaDefinitionV2) - v2Before; got != 0 {
+		t.Errorf("the dashboard Aha leaked %d observations into v2, want 0", got)
+	}
+}
+
+// ahaObservations reads one aha_definition series of the time_to_aha histogram.
+func ahaObservations(t *testing.T, definition monitoring.AhaDefinition) uint64 {
+	t.Helper()
+	obs, err := monitoring.TimeToAha.GetMetricWithLabelValues(definition)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues(%q): %v", definition, err)
+	}
+	metric, ok := obs.(prometheus.Metric)
+	if !ok {
+		t.Fatalf("observer for %q is not a prometheus.Metric", definition)
+	}
+	var out dto.Metric
+	if err := metric.Write(&out); err != nil {
+		t.Fatalf("writing metric for %q: %v", definition, err)
+	}
+	return out.GetHistogram().GetSampleCount()
 }
 
 func TestGetState_ReportsTimeToAha(t *testing.T) {

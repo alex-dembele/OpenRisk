@@ -128,6 +128,56 @@ Système de **rôles métiers** par-dessus le RBAC runtime existant. **Additionn
 - **Audit des boutons morts** : `docs/ui/dead-controls.md` recense **13 contrôles morts en production** (traités) + 4 dans du code inatteignable (fichiers supprimés) + 5 laissés avec leur raison. Notamment : point vert « Realtime » → **vrai indicateur de connexion** (`lib/connection.ts`, alimenté par les événements online/offline **et** l'issue de chaque appel axios ; un 4xx n'est pas une panne) · **micro supprimé** · « Voir toutes les notifications » **supprimé** (il ne faisait que fermer le panneau) · **« Supprimer l'organisation » implémenté** (c'était un `<button>` sans `onClick` — `DELETE /rbac/tenants/:id` + radiographie d'impact + logout) · Actualiser / Synchroniser / Matcher → états en vol visibles · funnel de l'Asset Universe → **vrai filtre par criticité** (masque aussi les arêtes pendantes).
 - **Tests** : `frontend/src/shared/datatable/__tests__/DataTable.test.tsx` (**25 tests, verts**) pour toute la logique pure ; `tests/e2e/datatable.spec.ts` + `tests/e2e/dead-controls.spec.ts` (**68 cas** listés par Playwright) pour les effets observables, dont l'obligatoire *« menu de la dernière ligne d'une table de 200 items entièrement visible »*. **Restes honnêtes — apurés le 2026-09-08 (#583)** : la chaîne Go est passée (`go build ./...` et `go vet ./...`, sortie 0, Go 1.25.12) et les E2E ont été **exécutés** contre un backend + frontend réels. Le compte de « 68 cas » était un compte de fichiers : la suite complète fait **270 cas** (chromium + Mobile Chrome) et sort à **197 passés · 62 échoués · 11 skippés · 0 flaky**. Le cas obligatoire — *menu de la dernière ligne d'une table de 200 items entièrement visible* — **passe** sur les deux projets, ainsi que les 25 tests unitaires `DataTable` (vérifiés : 25/25, dans une suite front de 516 tests tous verts). Les 62 échecs sont déposés en issues #587 → #596 ; ils ne sont **pas** corrigés ici. Reste ouvert : la suite n'a jamais tourné en CI — le job `E2E Tests` meurt au démarrage du backend faute de clé RSA (#587) — et 31 des 62 échecs sont le throttle d'authentification du produit lui-même (#588). Tant que ces deux-là tiennent, un E2E rouge ne se lit pas comme « le produit est cassé ».
 
+## Posture Reveal W1-05 (#438) — PR 1/4 : la métrique Aha devient versionnée, `posture.revealed` entre dans le vocabulaire
+
+**Problème** — #438 déplace le moment Aha du calcul de score du tableau de bord
+exécutif vers le Posture Reveal. Les deux mesurent des parcours différents : leurs
+durées ne sont **pas comparables**, et les additionner dans une seule série ferait
+marcher un échelon dans le P50 de `SlowTimeToAha` le jour de la bascule, pour une
+raison qui n'a rien à voir avec un ralentissement du produit. Cette PR pose la
+plomberie ; elle ne construit ni le tunnel ni le reveal.
+
+- **D-010 — `openrisk_time_to_aha_seconds` gagne un label `aha_definition`**
+  (`backend/pkg/monitoring/activation.go`). `TimeToAha` passe de `Histogram` à
+  `HistogramVec{aha_definition}` ; `AhaDefinitionV1` = définition tableau de bord
+  exécutif (le site d'appel actuel, `internal/application/activation/aha.go`),
+  `AhaDefinitionV2` = Posture Reveal, vide jusqu'à la PR 3. `ObserveTimeToAha`
+  exige désormais la définition et rejette la chaîne vide : une observation non
+  étiquetée créerait en silence une troisième série que rien n'interroge.
+  `SlowTimeToAha` (`deployment/monitoring/alerts.yml`) sélectionne
+  `aha_definition="v2"` — un histogramme sans observation n'a pas de quantile,
+  donc l'alerte est muette et non menteuse jusqu'au premier reveal.
+- **Le défaut que D-010 interdit d'hériter est corrigé** : `AhaReachedTotal.Inc()`
+  vivait *à l'intérieur* de `ObserveTimeToAha`, si bien qu'un tenant sans ancre
+  `signup` atteignait l'Aha **sans jamais être compté** — précisément les tenants
+  amorcés par le backfill #234. Le comptage sort dans `CountAhaReached()`, appelé
+  au moment où l'événement est enregistré, avec ou sans durée honnête à observer.
+  Le compteur reste **non étiqueté** volontairement : il est le numérateur de
+  `NoActivationDespiteSignups`, et un `CounterVec` n'a aucune série tant qu'il n'a
+  pas été incrémenté, ce qui aurait laissé cette alerte avec un membre droit vide.
+- **D-011 — `posture.revealed` est une clé hors catalogue**
+  (`backend/internal/domain/activation.go`). `ActivationPostureRevealed` est
+  ajoutée, `ValidateActivationSteps()` est laissée **intacte** (elle itère
+  `activationSteps` et n'avait besoin d'aucun amendement), et une sœur
+  `ValidateNonChecklistEventKeys()` assure la direction inverse : aucune ancre ni
+  aucun résultat observé côté serveur (`signup`, `aha.reached`, `posture.revealed`)
+  n'a fui **dans** le catalogue. C'est la direction qu'une édition future casse —
+  quelqu'un ajoute une ligne « voyez votre posture » à la checklist, la bijection
+  tient toujours, et le panneau affiche une ligne sur laquelle l'utilisateur ne
+  peut pas agir. Le test négatif prouve exactement ce scénario.
+- **Nommage** — D-011 écrivait `EventKeyPostureRevealed` ; le symbole est
+  `ActivationPostureRevealed` pour suivre le préfixe `Activation*` des huit autres
+  clés du même bloc. La valeur sur le fil, `"posture.revealed"`, est bien celle que
+  D-011 fixe, et un test l'assère littéralement.
+
+**Ce qui n'est PAS fait dans cette PR** — le tunnel bloquant à cinq étapes, la
+route `/posture`, `/onboarding/recognition`, le catalogue de risques de démarrage,
+`SourceStarter` (D-012), le score résiduel et son ADR (D-013), la mise à jour de
+`ROADMAP.md` 17.6 et la ligne de `docs/MARKETING_CLAIM_MATRIX.md` citant
+`posture.revealed`. Rien de tout cela n'est vrai tant que le reveal n'existe pas,
+et la RÈGLE #12 interdit de le documenter avant. PR 2 → 4 de #438.
+
+
 ## Onboarding W1-04 (#234) — la checklist dit enfin la vérité aux tenants déjà configurés
 
 **Problème** — le journal d'événements d'activation est **en avant seulement** : une

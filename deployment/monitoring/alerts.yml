@@ -192,8 +192,15 @@ groups:
       # compliance gap identified). The alert fires at 12 minutes so there is
       # headroom between the target and the page — an alert set at the target
       # fires on every ordinary bad day and gets muted.
+      #
+      # The `aha_definition="v2"` selector is not optional (D-010). The Aha moved
+      # from the executive-dashboard score computation (v1) to the Posture Reveal
+      # (v2); the two measure different journeys, so a quantile over both would
+      # step at the switch for a reason that has nothing to do with the product
+      # getting slower. v2 starts empty — a histogram with no observations has no
+      # quantile, so this alert is simply silent until the first reveal lands.
       - alert: SlowTimeToAha
-        expr: histogram_quantile(0.5, sum(rate(openrisk_time_to_aha_seconds_bucket[6h])) by (le)) > 720
+        expr: histogram_quantile(0.5, sum(rate(openrisk_time_to_aha_seconds_bucket{aha_definition="v2"}[6h])) by (le)) > 720
         for: 30m
         labels:
           severity: warning
