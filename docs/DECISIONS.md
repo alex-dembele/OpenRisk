@@ -5,33 +5,49 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
-### D-041 — may the backend container generate its own RS256 keypair? · raised 2026-09-09
-**Context** — #328's criterion 5 wants a one-click deploy to a third-party
-platform (Render/Railway/Fly). It cannot be built today: the backend panics at
-boot without an RS256 keypair (`internal/config/config.go:71`), and no PaaS
-blueprint can generate a PEM — Render's `generateValue` makes random strings,
-not keypairs. So any button would ask the user to paste a private key, which is
-not one click and is a bad first instruction to give someone.
-An **uncommitted** `backend/docker-entrypoint.sh` in the working tree already
-solves it: it generates a 2048-bit pair into the secrets volume on first boot,
-under `umask 077`, and never overwrites anything supplied. Nothing references
-it — no Dockerfile, no compose file.
-**Why this reaches you** — wiring it in changes an auth/crypto behaviour, not a
-bug: the failure mode moves from "refuse to boot until an operator supplies
-keys" to "quietly mint keys". That is the redesign CLAUDE.md reserves for you.
-The consequence to weigh: a key born inside an ephemeral container is lost when
-the volume is, and every token signed by it dies with it.
-**Options** — (A) wire the entrypoint in for self-host/PaaS images only, keeping
-fail-fast for production images; (B) wire it in everywhere; (C) leave it, and
-ship no one-click deploy.
-**Chosen while waiting** — (C). #328 ships without criterion 5 rather than with
-an unverifiable button; nothing was wired in.
-**Cost of delay** — the one-click acquisition channel stays closed.
-**Recommendation** — (A), plus a startup warning naming the generated key, so an
-operator who meant to supply their own finds out immediately.
-
-
 ## Resolved
+
+### D-041 — the container may mint its own RS256 keypair, on the PaaS image only · decided 2026-09-10
+**Decided (owner)** — Option A, narrowed. `backend/docker-entrypoint.sh` is wired
+into **`deployment/docker/Dockerfile.render` and nothing else**. The blueprint
+must declare a persistent disk mounted at `/app/secrets`, and the entrypoint must
+log loudly that it generated a key the operator did not supply.
+
+**The raised entry was stale in three ways; the code was read rather than
+trusted.** Recorded here because the next reader would otherwise inherit them:
+
+1. **Self-hosting was already solved, and not by the container.**
+   `scripts/install.sh:55-61` (merged with #328) generates the RS256 pair on the
+   HOST, and `deploy/selfhost/docker-compose.yml:71` mounts it **read-only**
+   (`./secrets:/app/secrets:ro`). An entrypoint could not write there if it tried.
+   The raised entry's "nothing references it — no Dockerfile, no compose file" was
+   backwards: the shipped self-host path does not need it.
+2. **The image split option A assumed already exists.** Three paths, not one:
+   `deploy/selfhost/` (host-generated keys, merged), the **root `Dockerfile`**
+   (what `.github/workflows/deploy.yml:85` builds with `context: .` for staging
+   and production), and `deployment/docker/Dockerfile.render` (PaaS, no entrypoint
+   today). The `backend/Dockerfile` the working tree had modified is the
+   **development** `docker-compose.yaml` image — neither the shipped self-host
+   deployment nor production.
+3. **The gap is therefore PaaS and only PaaS**, where no host step exists. No
+   Render/Railway/Fly blueprint is committed at all, so the feature is to be built
+   whole, not merely unblocked.
+
+**Rationale (owner)** — the PaaS image is the one a stranger uses to try the
+product, and "refuses to boot until you paste a private key" is the worst possible
+first instruction for exactly that population. Production keeps fail-fast because
+a restarted pod that silently mints a fresh key would log everyone out with no
+alert saying why. Development is left alone: it has no acquisition value and
+divergence from production costs more than the convenience is worth.
+
+**Consequence** — Reversible: this is one `ENTRYPOINT` line in one image, and
+nothing is persisted that cannot be regenerated. The failure mode to accept: if
+the disk is lost, every token signed by that key dies and all sessions end. That
+is a logout, not data loss. The persistent disk is **not optional** — Render's
+free tier has none, so without it "lost" means "on every redeploy", and the
+blueprint must not offer a plan that cannot carry the disk.
+
+**Unblocked** — #623 (the one-click PaaS deploy, #328's undelivered criterion 5).
 
 ### D-040 — what a self-hosted instance gets · decided 2026-09-09
 **Decided (owner)** — "Si une personne veut héberger lui-même tout sera gratuit
