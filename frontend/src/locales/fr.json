@@ -505,7 +505,8 @@
       "members": "membres",
       "action": "Voir ma posture",
       "loading": "Lecture de vos données…",
-      "error": "Impossible de lire vos données."
+      "error": "Impossible de lire vos données.",
+      "completeFailed": "Impossible de terminer. Réessayez."
     },
     "checklist": {
       "close": "Masquer la liste de démarrage",

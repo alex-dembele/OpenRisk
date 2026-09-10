@@ -505,7 +505,8 @@
       "members": "members",
       "action": "See my posture",
       "loading": "Reading your data…",
-      "error": "Your data could not be read."
+      "error": "Your data could not be read.",
+      "completeFailed": "Could not finish. Try again."
     },
     "checklist": {
       "close": "Hide the getting-started list",
