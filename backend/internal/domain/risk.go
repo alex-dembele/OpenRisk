@@ -155,6 +155,14 @@ const (
 	SourceImport   RiskSource = "import"    // Imported from file
 	SourceVendor   RiskSource = "vendor"    // From vendor assessment
 	SourceAI       RiskSource = "ai"        // AI-generated
+	// SourceStarter marks a risk the onboarding tunnel wrote from the starter
+	// catalogue after the user selected it (#438, D-012). Provenance matters more
+	// here than anywhere else on this enum: these are rows OpenRisk put in a
+	// customer's register, and a GRC product that cannot say which risks its own
+	// onboarding wrote has a credibility problem no support ticket recovers.
+	//
+	// The column is already varchar(20), so this value needs NO migration.
+	SourceStarter RiskSource = "starter"
 )
 
 // ParseRiskSource validates and converts a string into a RiskSource.
@@ -166,7 +174,7 @@ func ParseRiskSource(s string) (RiskSource, error) {
 		return SourceManual, nil
 	}
 	switch RiskSource(s) {
-	case SourceManual, SourceCTIAuto, SourceScanAuto, SourceImport, SourceVendor, SourceAI:
+	case SourceManual, SourceCTIAuto, SourceScanAuto, SourceImport, SourceVendor, SourceAI, SourceStarter:
 		return RiskSource(s), nil
 	default:
 		return "", NewValidationError(fmt.Sprintf("invalid risk source: %q", s))
@@ -309,7 +317,7 @@ type Risk struct {
 	LastReviewedAt     *time.Time `json:"last_reviewed_at,omitempty"`
 
 	// Source Tracking
-	Source      RiskSource `gorm:"type:varchar(20);default:'manual';index" json:"source"` // manual|cti_auto|scan_auto|import|vendor|ai
+	Source      RiskSource `gorm:"type:varchar(20);default:'manual';index" json:"source"` // manual|cti_auto|scan_auto|import|vendor|ai|starter
 	SourceCVEID *string    `gorm:"index" json:"source_cve_id"`                            // CVE identifier if from CTI
 
 	// Origin of an automatically proposed risk (Attack Surface §4). A machine
