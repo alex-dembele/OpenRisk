@@ -2859,15 +2859,24 @@ func main() {
 	// The only writes are (a) acknowledging that a celebration was shown, and
 	// (b) the wizard's own answers.
 	// =========================================================================
+	// The Posture Reveal's read side (#438). Every query it runs filters on
+	// tenant_id — criterion 10 — and the compile-time assertions in
+	// gorm_posture_repository.go are what keep its three ports honest.
+	postureRepo := repository.NewGormPostureRepository(database.DB)
 	onboardingUC := appactivation.NewOnboardingUseCase(activationRepo, activationRecorder).
 		WithOrgUpdater(orgRepo).
 		WithOrgCurrencyUpdater(orgRepo).
-		WithProfileUpdater(userRepo)
+		WithProfileUpdater(userRepo).
+		// Auto-skip (criteria 2 and 3): GET /onboarding/state resolves the whole
+		// tunnel in one call, skipped steps included.
+		WithStepProbe(postureRepo)
 	activationHandler := handlers.NewActivationHandler(
 		appactivation.NewGetStateUseCase(activationRepo),
 		appactivation.NewMarkCelebratedUseCase(activationRepo),
 		onboardingUC,
-	)
+	).
+		WithPosture(appactivation.NewPostureUseCase(postureRepo, activationRepo, activationRecorder)).
+		WithRecognition(appactivation.NewRecognitionUseCase(postureRepo))
 	// Readable by any authenticated member: the get-started panel is not a
 	// privileged view, and gating it behind a permission would hide the product's
 	// own instructions from exactly the people who need them most.
@@ -2882,7 +2891,13 @@ func main() {
 	protected.Get("/onboarding/state", activationHandler.GetOnboardingState)
 	protected.Get("/onboarding/suggestions", activationHandler.GetOnboardingSuggestions)
 	protected.Post("/onboarding/complete", activationHandler.CompleteOnboarding)
+	protected.Get("/onboarding/recognition", activationHandler.GetRecognition)
 	protected.Put("/onboarding/steps/:step", activationHandler.SaveOnboardingStep)
+
+	// The Posture Reveal (#438). Outside the /onboarding group on purpose: it is
+	// a product surface a user returns to, not a step of a wizard they complete
+	// once. A 404 here is criterion 8's explicit error state, not a bug.
+	protected.Get("/posture", activationHandler.GetPosture)
 
 	// The periodic sync worker (NVD 1h / CISA 6h + post-sync matching) runs in
 	// production. In dev it stays off by default to avoid hitting the feeds on every
