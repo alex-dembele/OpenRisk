@@ -93,7 +93,10 @@
     "templateDownload": "Télécharger le modèle CSV",
     "noRisks": "Aucun risque trouvé",
     "noRisksDescription": "Commencez par créer votre premier risque pour le gérer ici.",
-    "createFirstRisk": "Créer mon premier risque"
+    "createFirstRisk": "Créer mon premier risque",
+    "createRiskSubtitle": "Créez un risque avec score en temps réel.",
+    "category": "Catégorie",
+    "uncategorised": "Non classé"
   },
   "statuses": {
     "open": "Ouvert",

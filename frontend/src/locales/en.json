@@ -93,7 +93,10 @@
     "templateDownload": "Download CSV Template",
     "noRisks": "No Risks Found",
     "noRisksDescription": "Start by creating your first risk to manage it here.",
-    "createFirstRisk": "Create My First Risk"
+    "createFirstRisk": "Create My First Risk",
+    "createRiskSubtitle": "Create a risk with its score computed as you type.",
+    "category": "Category",
+    "uncategorised": "Uncategorised"
   },
   "statuses": {
     "open": "Open",
