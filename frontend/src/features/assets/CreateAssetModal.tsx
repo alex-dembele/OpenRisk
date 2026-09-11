@@ -127,20 +127,31 @@ export const CreateAssetModal = ({ isOpen, onClose }: CreateAssetModalProps) => 
             transition={{ duration: 0.22, type: 'spring', stiffness: 240 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-elevated shadow-card-lg">
+            {/* Announced as a dialog and named by its own heading. Without these
+                a screen reader walks straight past the form into the inventory
+                behind it, which is still in the tree. */}
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-asset-title"
+              className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-elevated shadow-card-lg"
+            >
               <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-6 py-5">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-primary/10 p-2 text-primary">
                     <Server size={20} />
                   </div>
-                  <h2 className="text-xl font-semibold text-ink">{t('assets.createAsset')}</h2>
+                  <h2 id="create-asset-title" className="text-xl font-semibold text-ink">
+                    {t('assets.createAsset')}
+                  </h2>
                 </div>
                 <button
                   type="button"
                   onClick={handleClose}
+                  aria-label={t('common.close')}
                   className="rounded-full p-2 text-ink-soft hover:bg-hover hover:text-ink transition-colors"
                 >
-                  <X size={20} />
+                  <X size={20} aria-hidden="true" />
                 </button>
               </div>
 
@@ -161,10 +172,14 @@ export const CreateAssetModal = ({ isOpen, onClose }: CreateAssetModalProps) => 
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-ink-muted uppercase tracking-wider">
+                      <label
+                        htmlFor="create-asset-type"
+                        className="text-xs font-medium text-ink-muted uppercase tracking-wider"
+                      >
                         {t('assets.form.type')}
                       </label>
                       <select
+                        id="create-asset-type"
                         {...register('type')}
                         disabled={isSubmitting}
                         className="w-full h-10 rounded-lg border border-border bg-elevated px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
@@ -177,10 +192,14 @@ export const CreateAssetModal = ({ isOpen, onClose }: CreateAssetModalProps) => 
                       </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-ink-muted uppercase tracking-wider">
+                      <label
+                        htmlFor="create-asset-criticality"
+                        className="text-xs font-medium text-ink-muted uppercase tracking-wider"
+                      >
                         {t('assets.form.criticality')}
                       </label>
                       <select
+                        id="create-asset-criticality"
                         {...register('criticality')}
                         disabled={isSubmitting}
                         className="w-full h-10 rounded-lg border border-border bg-elevated px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
@@ -199,10 +218,14 @@ export const CreateAssetModal = ({ isOpen, onClose }: CreateAssetModalProps) => 
                   </Field>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-ink-muted uppercase tracking-wider">
+                    <label
+                      htmlFor="create-asset-category"
+                      className="text-xs font-medium text-ink-muted uppercase tracking-wider"
+                    >
                       {t('assets.form.category', 'Catégorie typée')}
                     </label>
                     <select
+                      id="create-asset-category"
                       value={category}
                       disabled={isSubmitting}
                       onChange={(e) => {
