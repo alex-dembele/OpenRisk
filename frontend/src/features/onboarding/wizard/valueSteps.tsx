@@ -193,7 +193,7 @@ export function ScoreStep() {
           </p>
         </div>
 
-        <Matrix pIndex={pIndex} iIndex={iIndex} tr={tr} />
+        <Matrix pIndex={pIndex} iIndex={iIndex} score={score} tr={tr} />
       </div>
     </StepShell>
   );
@@ -252,10 +252,13 @@ function Slider({
 function Matrix({
   pIndex,
   iIndex,
+  score,
   tr,
 }: {
   pIndex: number;
   iIndex: number;
+  /** The live P × I the sliders produce — what the readout shows. */
+  score: number;
   tr: (fr: string, en: string) => string;
 }) {
   const reduced = usePrefersReducedMotion();
@@ -294,7 +297,12 @@ function Matrix({
                       transition: reduced ? 'none' : 'background .18s ease, outline .18s ease',
                     }}
                   >
-                    {active ? (p * impact).toFixed(1) : ''}
+                    {/* The score the user actually set, not this cell's own
+                        band product. The cell marks WHERE they are; the number
+                        is WHAT they scored. Showing the band's arithmetic put
+                        two different figures on screen for one thing — the
+                        readout said 6.30 beside a cell saying 5.6. */}
+                    {active ? score.toFixed(1) : ''}
                   </td>
                 );
               })}
