@@ -73,7 +73,7 @@
     "acceptanceReason": "Acceptance Reason",
     "duplicateRisk": "Duplicate Risk",
     "bulkActions": "Bulk Actions",
-    "selectedCount": "{count} risk(s) selected",
+    "selectedCount": "{count} selected",
     "bulkDelete": "Delete",
     "bulkChangeStatus": "Change Status",
     "bulkAssignTo": "Assign To",
@@ -96,7 +96,15 @@
     "createFirstRisk": "Create My First Risk",
     "createRiskSubtitle": "Create a risk with its score computed as you type.",
     "category": "Category",
-    "uncategorised": "Uncategorised"
+    "uncategorised": "Uncategorised",
+    "fieldTitle": "Title",
+    "tags": "Tags (comma separated)",
+    "frameworks": "Frameworks",
+    "affectedAssets": "Affected assets",
+    "noAssets": "No asset.",
+    "updated": "Risk updated",
+    "updateFailed": "Update failed",
+    "fieldDescription": "Description"
   },
   "statuses": {
     "open": "Open",

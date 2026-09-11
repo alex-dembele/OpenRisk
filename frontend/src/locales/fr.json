@@ -73,7 +73,7 @@
     "acceptanceReason": "Justification de l'acceptation",
     "duplicateRisk": "Dupliquer le risque",
     "bulkActions": "Actions en masse",
-    "selectedCount": "{count} risque(s) sélectionné(s)",
+    "selectedCount": "{count} sélectionné(s)",
     "bulkDelete": "Supprimer",
     "bulkChangeStatus": "Changer le statut",
     "bulkAssignTo": "Assigner à",
@@ -96,7 +96,15 @@
     "createFirstRisk": "Créer mon premier risque",
     "createRiskSubtitle": "Créez un risque avec score en temps réel.",
     "category": "Catégorie",
-    "uncategorised": "Non classé"
+    "uncategorised": "Non classé",
+    "fieldTitle": "Titre",
+    "tags": "Étiquettes (séparées par des virgules)",
+    "frameworks": "Référentiels",
+    "affectedAssets": "Actifs affectés",
+    "noAssets": "Aucun actif.",
+    "updated": "Risque mis à jour",
+    "updateFailed": "Erreur lors de la mise à jour",
+    "fieldDescription": "Description"
   },
   "statuses": {
     "open": "Ouvert",
