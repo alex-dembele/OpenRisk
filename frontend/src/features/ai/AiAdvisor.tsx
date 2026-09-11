@@ -96,6 +96,14 @@ export function AiAdvisor() {
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 58px)' }}>
+      {/* The page had no heading at all — no h1, no h2, nothing. Every other
+          screen in the app opens with one, and without it a screen-reader user
+          landing here has no way to tell which page they are on, nor to jump to
+          it from the headings list. It is visually hidden because the screen's
+          own chrome (the provenance badge, the conversation) already tells a
+          sighted user where they are. */}
+      <h1 className="sr-only">{tr('IA Advisor', 'AI Advisor')}</h1>
+
       {/* Provenance badge */}
       <div
         className="shrink-0 flex items-center justify-center gap-2 py-2.5"
@@ -213,13 +221,25 @@ export function AiAdvisor() {
               className="flex-1 h-12 px-[18px] rounded-[14px] text-[14px] text-ink outline-none disabled:opacity-60"
               style={{ border: '1px solid var(--border-strong)', background: 'var(--bg-elevated)' }}
             />
+            {/* An icon-only control needs a name, or it is announced as
+                "button" and nothing more — the one control that sends the
+                message. The label follows the state so a screen reader is told
+                the send is in flight rather than silently ignored. */}
             <button
               onClick={() => send()}
               disabled={ask.isPending}
+              aria-label={
+                ask.isPending ? tr('Envoi en cours…', 'Sending…') : tr('Envoyer', 'Send')
+              }
+              title={ask.isPending ? tr('Envoi en cours…', 'Sending…') : tr('Envoyer', 'Send')}
               className="w-12 h-12 rounded-[14px] flex items-center justify-center text-fg-primary shrink-0 disabled:opacity-60"
               style={{ background: 'var(--accent-solid)', color: 'var(--fg-on-solid)' }}
             >
-              {ask.isPending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+              {ask.isPending ? (
+                <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Send size={20} aria-hidden="true" />
+              )}
             </button>
           </div>
           <div className="text-center text-[11px] text-ink-muted mt-2.5">
