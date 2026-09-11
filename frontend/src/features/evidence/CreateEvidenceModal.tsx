@@ -72,13 +72,24 @@ export function CreateEvidenceModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       {/* max-h + internal scroll: the submit button must never be pushed off
           screen on a short viewport, which is a bug this project has already had. */}
-      <div className="relative w-full max-w-[560px] max-h-[90vh] flex flex-col rounded-xl bg-surface border border-line or-scalein">
+      {/* Announced as a dialog and named by its heading; the evidence library
+          behind it stays in the accessibility tree otherwise. */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-evidence-title"
+        className="relative w-full max-w-[560px] max-h-[90vh] flex flex-col rounded-xl bg-surface border border-line or-scalein"
+      >
         <header className="px-5 py-4 border-b border-line flex items-center justify-between shrink-0">
-          <h2 className="text-ink font-semibold text-[15px]">
+          <h2 id="create-evidence-title" className="text-ink font-semibold text-[15px]">
             {tr('Enregistrer une preuve', 'Record evidence')}
           </h2>
-          <button className="p-1.5 rounded-md hover:bg-surface-3 text-ink-muted" onClick={onClose}>
-            <X size={16} />
+          <button
+            className="p-1.5 rounded-md hover:bg-surface-3 text-ink-muted"
+            onClick={onClose}
+            aria-label={tr('Fermer', 'Close')}
+          >
+            <X size={16} aria-hidden="true" />
           </button>
         </header>
 

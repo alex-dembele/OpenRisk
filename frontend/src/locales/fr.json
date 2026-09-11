@@ -73,7 +73,7 @@
     "acceptanceReason": "Justification de l'acceptation",
     "duplicateRisk": "Dupliquer le risque",
     "bulkActions": "Actions en masse",
-    "selectedCount": "{count} risque(s) sélectionné(s)",
+    "selectedCount": "{count} sélectionné(s)",
     "bulkDelete": "Supprimer",
     "bulkChangeStatus": "Changer le statut",
     "bulkAssignTo": "Assigner à",
@@ -93,7 +93,18 @@
     "templateDownload": "Télécharger le modèle CSV",
     "noRisks": "Aucun risque trouvé",
     "noRisksDescription": "Commencez par créer votre premier risque pour le gérer ici.",
-    "createFirstRisk": "Créer mon premier risque"
+    "createFirstRisk": "Créer mon premier risque",
+    "createRiskSubtitle": "Créez un risque avec score en temps réel.",
+    "category": "Catégorie",
+    "uncategorised": "Non classé",
+    "fieldTitle": "Titre",
+    "tags": "Étiquettes (séparées par des virgules)",
+    "frameworks": "Référentiels",
+    "affectedAssets": "Actifs affectés",
+    "noAssets": "Aucun actif.",
+    "updated": "Risque mis à jour",
+    "updateFailed": "Erreur lors de la mise à jour",
+    "fieldDescription": "Description"
   },
   "statuses": {
     "open": "Ouvert",
@@ -222,7 +233,13 @@
     "closeDrawer": "Fermer",
     "save": "Sauvegarder",
     "dragHint": "Glissez des plans ici",
-    "reviewPending": "en retard"
+    "reviewPending": "en retard",
+    "createTitle": "Créer un plan d'atténuation",
+    "createSubtitle": "Créez un plan pour atténuer un risque",
+    "fieldTitle": "Titre",
+    "fieldDescription": "Description",
+    "fieldDeadline": "Échéance",
+    "fieldPriority": "Priorité"
   },
   "compliance": {
     "title": "Conformité",
@@ -505,7 +522,8 @@
       "members": "membres",
       "action": "Voir ma posture",
       "loading": "Lecture de vos données…",
-      "error": "Impossible de lire vos données."
+      "error": "Impossible de lire vos données.",
+      "completeFailed": "Impossible de terminer. Réessayez."
     },
     "checklist": {
       "close": "Masquer la liste de démarrage",

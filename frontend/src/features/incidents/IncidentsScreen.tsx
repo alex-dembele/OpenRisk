@@ -50,8 +50,25 @@ export function IncidentsScreen() {
   const navigate = useNavigate();
   const tr = (fr: string, en: string) => (lang === 'fr' ? fr : en);
 
-  const hasRole = useAuthStore((s) => s.hasRole);
-  const canWrite = hasRole('admin') || hasRole('analyst');
+  // Gate on the permission the SERVER actually enforces, not on a role name.
+  //
+  // This was hasRole('admin') || hasRole('analyst'). The backend abandoned that
+  // exact gate — cmd/server/main.go says so in as many words: "analyst" is not a
+  // runtime org role (they are root/admin/user), so the check was effectively
+  // admin-only and could never be granted to a business role. It moved to the
+  // incidents:* permission family; the client never followed.
+  //
+  // The consequence was not cosmetic. A tenant's founding user carries
+  // permissions ["*"] and an EMPTY role string, so hasRole('admin') was false and
+  // the owner of the workspace could not declare an incident on their own
+  // incident screen — while POST /incidents would have accepted it.
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  // Three permissions, because the server enforces three. One boolean for all of
+  // them would hide Delete from someone who may resolve, or offer Delete to
+  // someone the API will refuse.
+  const canCreate = hasPermission('incidents:create');
+  const canUpdate = hasPermission('incidents:update');
+  const canDelete = hasPermission('incidents:delete');
 
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState<Incident | null>(null);
@@ -246,7 +263,7 @@ export function IncidentsScreen() {
             />
             <select
               value={inc.status}
-              disabled={!canWrite}
+              disabled={!canUpdate}
               aria-label={tr('Statut de l’incident', 'Incident status')}
               onChange={(e) => setStatus(inc, e.target.value as IncidentStatus)}
               className="appearance-none text-[12px] font-semibold rounded-full pl-6 pr-6 py-1.5 outline-none disabled:opacity-70"
@@ -254,7 +271,7 @@ export function IncidentsScreen() {
                 color: statusMeta(inc.status).color,
                 background: `color-mix(in srgb,${statusMeta(inc.status).color} 12%,transparent)`,
                 border: `1px solid color-mix(in srgb,${statusMeta(inc.status).color} 30%,transparent)`,
-                cursor: canWrite ? 'pointer' : 'not-allowed',
+                cursor: canUpdate ? 'pointer' : 'not-allowed',
               }}
             >
               {STATUSES.map((st) => (
@@ -285,7 +302,7 @@ export function IncidentsScreen() {
         ),
       },
     ],
-    [lang, canWrite],
+    [lang, canUpdate],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* -------------------------------------------------------------- actions */
@@ -309,11 +326,11 @@ export function IncidentsScreen() {
         icon: Trash2,
         danger: true,
         separatorBefore: true,
-        hidden: () => !canWrite,
+        hidden: () => !canDelete,
         onSelect: (inc) => remove(inc),
       },
     ],
-    [lang, canWrite, navigate],
+    [lang, canDelete, navigate],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bulkActions: BulkAction<Incident>[] = useMemo(
@@ -322,7 +339,7 @@ export function IncidentsScreen() {
         key: 'resolve',
         label: tr('Marquer résolus', 'Mark resolved'),
         icon: CheckCircle2,
-        hidden: !canWrite,
+        hidden: !canUpdate,
         selectionOnly: true,
         run: async ({ rows }) => {
           await Promise.all(
@@ -340,14 +357,14 @@ export function IncidentsScreen() {
         label: tr('Supprimer', 'Delete'),
         icon: Trash2,
         danger: true,
-        hidden: !canWrite,
+        hidden: !canDelete,
         selectionOnly: true,
         run: async ({ rows }) => {
           rows.forEach((inc) => remove(inc));
         },
       },
     ],
-    [lang, canWrite, updateIncident],
+    [lang, canUpdate, canDelete, updateIncident],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -363,7 +380,7 @@ export function IncidentsScreen() {
               onClick={exportCsv}
             />
             <Btn label={tr('War Room', 'War Room')} icon={Activity} onClick={openWarRoom} />
-            {canWrite && (
+            {canCreate && (
               <Btn
                 label={tr('Déclarer un incident', 'Declare an incident')}
                 icon={Siren}
@@ -426,7 +443,7 @@ export function IncidentsScreen() {
           'Titre, description ou déclarant…',
           'Title, description or reporter…',
         )}
-        selectable={canWrite}
+        selectable={canUpdate || canDelete}
         rowActions={rowActions}
         bulkActions={bulkActions}
         onRowClick={(inc) => setSelected(inc)}
@@ -441,7 +458,7 @@ export function IncidentsScreen() {
               'Nothing to report. An incident can be declared here, or opened automatically by a rule, a scan or a threat feed — each one then carries a banner saying which.',
             )}
             primaryAction={
-              canWrite ? (
+              canCreate ? (
                 <Btn
                   label={tr('Déclarer un incident', 'Declare an incident')}
                   icon={Siren}
@@ -458,7 +475,11 @@ export function IncidentsScreen() {
 
       {showCreate && <DeclareIncidentModal onClose={() => setShowCreate(false)} />}
       {selected && (
-        <IncidentDrawer incident={selected} canWrite={canWrite} onClose={() => setSelected(null)} />
+        <IncidentDrawer
+          incident={selected}
+          canWrite={canUpdate}
+          onClose={() => setSelected(null)}
+        />
       )}
     </PageFrame>
   );

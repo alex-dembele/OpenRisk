@@ -499,6 +499,28 @@ var decisions = []Decision{
 	{"/api/v1/activation/state", Pending,
 		"assessed, not pinned: same (tenant, user) gate, 401 when either is missing. Unresolved: the activation state aggregates progress across several modules and this sweep did not read each source. Settled by a two-tenant test over the activation state use case"},
 
+	// --- Posture reveal and recognition (#438) ----------------------------
+	//
+	// All three resolve (tenant, user) from the session and take no id from the
+	// request, and every query in gorm_posture_repository.go filters on the
+	// table's own tenant column — the control-mapping join carries a second
+	// guard, c.tenant_id = m.tenant_id, so a corrupt mapping row cannot pull
+	// another tenant's control status into this tenant's score.
+	//
+	// Pending rather than Covered, deliberately: the use-case tests
+	// (TestPostureSummary_NeverReadsAnotherTenant,
+	// TestRecognition_NeverReadsAnotherTenant,
+	// TestAdoptStarterRisks_NeverWritesToAnotherTenant) drive a reader double
+	// keyed BY TENANT, which proves the use case passes the caller's tenant
+	// down. It does NOT exercise the SQL. Claiming Covered on that basis would
+	// be exactly the guess this register exists to prevent.
+	{"/api/v1/posture", Pending,
+		"assessed, not pinned: (tenant, user) resolved from the session, 401 when either is missing; every query in gorm_posture_repository.go filters on tenant_id and the compliance_controls join carries c.tenant_id = m.tenant_id. Unresolved: application/activation TestPostureSummary_NeverReadsAnotherTenant asserts the use case reads only the caller's tenant, but it drives a double — the repository SQL itself has no cross-tenant test. Settled by a two-tenant repository test over RiskCounts, TopRisks, ControlCounts and ControlCreditsByRisk"},
+	{"/api/v1/onboarding/recognition", Pending,
+		"assessed, not pinned: same (tenant, user) gate; RecognitionCounts counts five tables, each on its own tenant column (organization_members on organization_id, which is that table's tenant column). Unresolved: application/activation TestRecognition_NeverReadsAnotherTenant drives a double, not the SQL. Settled by the same two-tenant repository test"},
+	{"/api/v1/onboarding/starter-risks", Pending,
+		"assessed, not pinned: GET returns a COMPILED-IN catalogue (pkg/onboarding) filtered by the caller's own stored sector and country, so the response body holds no tenant rows; the only tenant-derived field is already_adopted, read through the tenant-scoped risk repository. POST writes through application/risk CreateRiskUseCase, which stamps TenantID from the caller. Unresolved: TestAdoptStarterRisks_NeverWritesToAnotherTenant drives a writer double. Settled by a repository-level test asserting an adopted row lands on the caller's tenant only"},
+
 	// --- Risks and scoring (5) --------------------------------------------
 	{"/api/v1/risks", Covered,
 		"handler/risk_isolation_test TestRiskIsolation_ListLeaksNothing drives GET /risks over the real handler and repository from one tenant against another's register; TestRiskIsolation_NilTenantIsDenied covers the unresolved-tenant case"},

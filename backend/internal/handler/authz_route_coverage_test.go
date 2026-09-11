@@ -83,6 +83,26 @@ var routesWithoutPermissionGuard = []string{
 	"DELETE /tokens/:id",
 	"GET /action-center",
 	"GET /activation/state",
+	// #438 — the Posture Reveal, the recognition screen and the starter
+	// catalogue READ.
+	//
+	// Session-sufficient for the same reason as GET /activation/state, which
+	// this list already carries: they are the product's own account of where
+	// THIS user stands, resolved from (tenant, user) on the session with no id
+	// taken from the request. Gating a user's own posture behind a permission
+	// would hide their own data from them, and there is no permission that
+	// means "may look at yourself".
+	//
+	// The catalogue READ returns compiled-in statements (pkg/onboarding)
+	// filtered by the caller's own stored sector; the only tenant-derived field
+	// is already_adopted. The catalogue WRITE is NOT here — POST
+	// /onboarding/starter-risks carries risks:create, like every other risk
+	// write.
+	//
+	// NEEDS A REVIEWER'S AGREEMENT per this list's contract.
+	"GET /onboarding/recognition",
+	"GET /onboarding/starter-risks",
+	"GET /posture",
 	"GET /ai/status",
 	"GET /analytics/dashboard",
 	"GET /analytics/export",

@@ -17,12 +17,30 @@ import { AlertTriangle } from 'lucide-react';
 
 import { useI18n } from '../../hooks/useI18n';
 import type { RecognitionCounts } from '../../services/activationService';
-import { useCountUp, usePrefersReducedMotion, useRecognition } from './useActivation';
+import {
+  useCompleteOnboarding,
+  useCountUp,
+  usePrefersReducedMotion,
+  useRecognition,
+} from './useActivation';
 
 export function RecognitionPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { data, isLoading, isError } = useRecognition();
+
+  // Acknowledging the recognition IS this user's completion of onboarding.
+  //
+  // Without it they are trapped. `OnboardingGuard` sends anyone whose wizard is
+  // unfinished here from EVERY app route, and criterion 9 keeps the tunnel — the
+  // only other thing that completes it — off their screen. So the button led
+  // back to a page that led back to the button, for the whole population #234
+  // backfilled: every existing customer.
+  const complete = useCompleteOnboarding();
+
+  const enter = () => {
+    complete.mutate(undefined, { onSuccess: () => navigate('/posture') });
+  };
 
   if (isLoading) return <RecognitionSkeleton label={t('onboarding.recognition.loading')} />;
 
@@ -56,12 +74,20 @@ export function RecognitionPage() {
 
       <button
         type="button"
-        onClick={() => navigate('/posture')}
-        className="mt-8 px-5 py-2.5 rounded-lg text-[13.5px] font-semibold"
+        onClick={enter}
+        disabled={complete.isPending}
+        data-testid="recognition-continue"
+        className="mt-8 px-5 py-2.5 rounded-lg text-[13.5px] font-semibold disabled:opacity-60"
         style={{ background: 'var(--accent-solid)', color: 'var(--fg-on-solid)' }}
       >
-        {t('onboarding.recognition.action')}
+        {complete.isPending ? t('onboarding.tunnel.saving') : t('onboarding.recognition.action')}
       </button>
+
+      {complete.isError && (
+        <p className="text-[12.5px] mt-3 m-0" role="alert" style={{ color: 'var(--high)' }}>
+          {t('onboarding.recognition.completeFailed')}
+        </p>
+      )}
     </div>
   );
 }

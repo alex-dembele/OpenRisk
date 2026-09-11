@@ -5,6 +5,41 @@ recommends, and surfaces these in the daily brief. Run `/decide` to clear them.
 
 ## Open
 
+### D-043 — the sidebar shows five destinations twice · raised 2026-09-11
+**Context** — `frontend/src/shared/navModel.ts` defines seven nav groups. The
+first, `g_pilot`, holds exactly `risks · vulnerabilities · mitigations ·
+incidents · automation` — and every one of those five is a verbatim duplicate
+(same key, path, label, icon and permission) of an item in `g_identify`,
+`g_evaluate` or `g_treat`. The live sidebar renders 28 links of which 5 pairs
+point at the same route, and on `/risks` TWO sidebar links carry
+`aria-current="page"` at once.
+
+The model contradicts its own documentation twice. `g_pilot`'s comment says it
+is "« Où en suis-je ? » (dashboard par rôle, exécutif, financier)" — those five
+screens are in `g_monitor`, not here. And the block comment says the core
+intention "identify → score → treat → prove" **leads** the order; `g_pilot`
+leads instead.
+
+**Options**
+- **A — delete `g_pilot`.** The GRC flow (identify → evaluate → treat → prove)
+  becomes the navigation, matching what the file says it wanted. Five links
+  disappear from the sidebar; nobody loses a destination.
+- **B — keep `g_pilot` as a deliberate quick-access group, and remove the five
+  duplicates from the flow groups.** `g_evaluate` would then be empty and would
+  have to go, and "Traiter" would lose its whole contents.
+- **C — keep both and mark only one instance current.** The duplication stays;
+  only the `aria-current` defect is fixed.
+
+**Recommendation** — A. It is the only option under which the file's own stated
+intent and its contents agree, and it is the one that removes the duplication
+rather than hiding it.
+
+**Cost of delay** — Low but compounding: every new operational screen has to be
+added in two places, and the "is this group the dashboards or the registers?"
+question is re-asked by each person who edits the file.
+
+**Reversible?** — Yes, entirely. One array in one file.
+
 ### D-041 — may the backend container generate its own RS256 keypair? · raised 2026-09-09
 **Context** — #328's criterion 5 wants a one-click deploy to a third-party
 platform (Render/Railway/Fly). It cannot be built today: the backend panics at

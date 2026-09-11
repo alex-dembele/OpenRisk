@@ -4,7 +4,7 @@
 // the terms of the GNU Affero General Public License v3.0 (see LICENSE).
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router';
 import {
   ChevronsUpDown,
   PanelLeftClose,
@@ -152,12 +152,23 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
     const active = item.key === activeKey;
     const Icon = item.icon;
     return (
-      <button
+      // A LINK, not a button. Every nav entry used to be `<button
+      // onClick={navigate(...)}>`, which renders no href — so Ctrl/Cmd+click,
+      // middle-click and "copy link address" all did nothing, and a screen
+      // reader announced 27 buttons where a user expects a list of links.
+      //
+      // A risk manager comparing two registers side by side needs a second tab,
+      // and there was no way to open one. `Link` keeps the SPA navigation for a
+      // plain click and lets the browser handle the modified ones itself.
+      <Link
         key={item.key}
+        to={item.href ?? item.path}
         data-testid={`nav-${item.key}`}
         // Anchor for the product tour's third coach mark (features/onboarding/ProductTour).
         data-tour={`nav-${item.key}`}
-        onClick={() => navigate(item.href ?? item.path)}
+        // The visual highlight told sighted users which page they were on; this
+        // is the same fact, for everyone else.
+        aria-current={active ? 'page' : undefined}
         title={L[item.labelKey]}
         className={cn(
           'w-full flex items-center gap-[11px] px-[11px] py-2 rounded-[9px] relative mb-0.5 transition-colors',
@@ -203,7 +214,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
               {navCounts[item.badge.count]}
             </span>
           ))}
-      </button>
+      </Link>
     );
   };
 
