@@ -80,7 +80,12 @@ export function IngestModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
       style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(3px)' }}
       onClick={onClose}
     >
+      {/* Announced as a dialog and named by its heading; the findings table
+          behind it stays in the accessibility tree otherwise. */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ingest-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-[560px] rounded-[16px] flex flex-col"
         style={{
@@ -94,15 +99,17 @@ export function IngestModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
           className="flex items-center justify-between px-5 py-4"
           style={{ borderBottom: '1px solid var(--border)' }}
         >
-          <div className="flex items-center gap-2 text-[15px] font-bold text-ink">
-            <Upload size={17} /> {tr('Importer des findings', 'Import findings')}
-          </div>
+          {/* A dialog's name should come from a heading, not a styled div. */}
+          <h2 id="ingest-title" className="flex items-center gap-2 text-[15px] font-bold text-ink">
+            <Upload size={17} aria-hidden="true" /> {tr('Importer des findings', 'Import findings')}
+          </h2>
           <button
             onClick={onClose}
+            aria-label={tr('Fermer', 'Close')}
             className="w-8 h-8 rounded-[9px] flex items-center justify-center text-ink-soft"
             style={{ background: 'var(--bg-hover)' }}
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 

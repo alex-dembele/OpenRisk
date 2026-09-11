@@ -110,7 +110,12 @@ export function DeclareIncidentModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,.4)' }}
     >
+      {/* Announced as a dialog and named by its heading; the incident list
+          behind it stays in the accessibility tree otherwise. */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="declare-incident-title"
         className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-[14px] or-scalein"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)' }}
       >
@@ -119,6 +124,7 @@ export function DeclareIncidentModal({
           style={{ borderBottom: '1px solid var(--border)' }}
         >
           <h2
+            id="declare-incident-title"
             className="text-[15px] font-bold inline-flex items-center gap-2"
             style={{ color: 'var(--fg-primary)' }}
           >
