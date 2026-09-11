@@ -125,25 +125,35 @@ export const CreateMitigationModal = ({
             transition={{ duration: 0.22, type: 'spring', stiffness: 240 }}
             className="fixed inset-0 z-90 flex items-center justify-center p-4"
           >
-            <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-elevated shadow-card-lg">
+            {/* Announced as a dialog and named by its heading; the board behind
+                it stays in the accessibility tree otherwise. */}
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-mitigation-title"
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-elevated shadow-card-lg"
+            >
               <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-6 py-5">
                 <div>
-                  <h2 className="text-2xl font-semibold text-ink">Créer un plan d'atténuation</h2>
-                  <p className="text-sm text-ink-muted">Créez un plan pour atténuer un risque</p>
+                  <h2 id="create-mitigation-title" className="text-2xl font-semibold text-ink">
+                    {t('mitigations.createTitle')}
+                  </h2>
+                  <p className="text-sm text-ink-muted">{t('mitigations.createSubtitle')}</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleClose}
+                  aria-label={t('common.close')}
                   className="rounded-full p-2 text-ink-soft hover:bg-hover hover:text-ink transition-colors"
                 >
-                  <X size={20} />
+                  <X size={20} aria-hidden="true" />
                 </button>
               </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
                 <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6 scrollbar-thin">
                   <Field
-                    label="Titre"
+                    label={t('mitigations.fieldTitle')}
                     message={errors.title?.message}
                     status={errors.title?.message ? 'invalid' : 'default'}
                   >
@@ -151,10 +161,14 @@ export const CreateMitigationModal = ({
                   </Field>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted">
-                      Description
+                    <label
+                      htmlFor="create-mitigation-description"
+                      className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted"
+                    >
+                      {t('mitigations.fieldDescription')}
                     </label>
                     <textarea
+                      id="create-mitigation-description"
                       {...register('description')}
                       rows={4}
                       className="w-full rounded-3xl border border-border bg-elevated px-4 py-3 text-sm text-ink outline-none focus:ring-2 focus:ring-primary/40"
@@ -167,23 +181,36 @@ export const CreateMitigationModal = ({
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted">
-                        Deadline
+                      <label
+                        htmlFor="create-mitigation-due-date"
+                        className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted"
+                      >
+                        {t('mitigations.fieldDeadline')}
                       </label>
-                      <Input type="date" {...register('due_date')} disabled={isSubmitting} />
+                      <Input
+                        id="create-mitigation-due-date"
+                        type="date"
+                        {...register('due_date')}
+                        disabled={isSubmitting}
+                      />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted">
-                        Priorité
+                      <label
+                        htmlFor="create-mitigation-priority"
+                        className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted"
+                      >
+                        {t('mitigations.fieldPriority')}
                       </label>
                       <select
+                        id="create-mitigation-priority"
                         {...register('priority')}
                         className="w-full rounded-3xl border border-border bg-elevated px-4 py-3 text-sm text-ink"
                       >
-                        <option value="critical">Critique</option>
-                        <option value="high">Élevé</option>
-                        <option value="medium">Moyen</option>
-                        <option value="low">Bas</option>
+                        {(['critical', 'high', 'medium', 'low'] as const).map((level) => (
+                          <option key={level} value={level}>
+                            {t(`mitigations.priority.${level}`)}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -191,7 +218,7 @@ export const CreateMitigationModal = ({
 
                 <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-elevated px-6 py-4">
                   <Button type="button" variant="ghost" onClick={handleClose}>
-                    Annuler
+                    {t('common.cancel')}
                   </Button>
                   <Button
                     type="submit"
@@ -199,8 +226,8 @@ export const CreateMitigationModal = ({
                     loading={isSubmitting}
                     className="gap-2"
                   >
-                    <Zap size={16} />
-                    Créer
+                    <Zap size={16} aria-hidden="true" />
+                    {t('common.create')}
                   </Button>
                 </div>
               </form>

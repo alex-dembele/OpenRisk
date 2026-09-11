@@ -225,7 +225,13 @@
     "closeDrawer": "Fermer",
     "save": "Sauvegarder",
     "dragHint": "Glissez des plans ici",
-    "reviewPending": "en retard"
+    "reviewPending": "en retard",
+    "createTitle": "Créer un plan d'atténuation",
+    "createSubtitle": "Créez un plan pour atténuer un risque",
+    "fieldTitle": "Titre",
+    "fieldDescription": "Description",
+    "fieldDeadline": "Échéance",
+    "fieldPriority": "Priorité"
   },
   "compliance": {
     "title": "Conformité",
