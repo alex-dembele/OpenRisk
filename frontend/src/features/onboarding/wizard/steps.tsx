@@ -16,11 +16,7 @@ import { toast } from 'sonner';
 import { useUIStore } from '../../../store/uiStore';
 import { useAuthStore } from '../../../hooks/useAuthStore';
 import { i18n, type OnboardingStepKey } from '../../../services/activationService';
-import {
-  useAdoptStarterRisks,
-  useOnboardingSuggestions,
-  useStarterRisks,
-} from '../useActivation';
+import { useAdoptStarterRisks, useOnboardingSuggestions, useStarterRisks } from '../useActivation';
 import { useCatalogs, useImportCatalogAsFramework } from '../../compliance/useCompliance';
 import type { StarterRiskOffer } from '../../../services/activationService';
 import { Field, StepShell } from './stepPrimitives';
@@ -92,9 +88,7 @@ export function OrganizationStep() {
     setCountry(str(stored, 'country'));
     setCurrency(str(stored, 'currency'));
     setTimezone(str(stored, 'timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'));
-    setFullName(
-      str(stored, 'full_name', str(legacyProfile, 'full_name', user?.full_name ?? '')),
-    );
+    setFullName(str(stored, 'full_name', str(legacyProfile, 'full_name', user?.full_name ?? '')));
     setJobTitle(str(stored, 'job_title', str(legacyProfile, 'job_title', user?.department ?? '')));
   }, [stored, legacyProfile, orgName, user]);
 
@@ -127,7 +121,10 @@ export function OrganizationStep() {
       error={error}
       onRetry={retry}
       errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
-      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      errorHint={tr(
+        'Vos réponses sont conservées — réessayez, rien n\u2019est perdu.',
+        'Your answers are kept — try again, nothing is lost.',
+      )}
       retryLabel={tr('Réessayer', 'Try again')}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
@@ -333,7 +330,10 @@ export function GoalStep() {
       error={error}
       onRetry={retry}
       errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
-      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      errorHint={tr(
+        'Vos réponses sont conservées — réessayez, rien n\u2019est perdu.',
+        'Your answers are kept — try again, nothing is lost.',
+      )}
       retryLabel={tr('Réessayer', 'Try again')}
     >
       <div className="flex flex-col gap-2.5">
@@ -458,7 +458,10 @@ function StarterRiskPicker({
     <div className="mt-7">
       <div className="flex items-baseline justify-between mb-2.5">
         <h2 className="text-[14px] font-bold text-ink m-0">
-          {tr(`Sélectionnez ${pick} risques qui vous concernent`, `Pick ${pick} risks that apply to you`)}
+          {tr(
+            `Sélectionnez ${pick} risques qui vous concernent`,
+            `Pick ${pick} risks that apply to you`,
+          )}
         </h2>
         {/* aria-live so the count is announced as the user selects, which is how
             a screen-reader user knows when the primary button will unlock. */}
@@ -566,7 +569,18 @@ export function FrameworkStep() {
   const { data: suggestions, isLoading } = useOnboardingSuggestions();
   const { data: catalogs } = useCatalogs();
   const importCatalog = useImportCatalogAsFramework();
+  const stored = useStoredAnswers('framework');
   const [imported, setImported] = useState<string[]>([]);
+
+  // Restore what was already imported. Without this, stepping Back and Forward
+  // cleared every tick: the catalogues were still imported server-side, but the
+  // step claimed they were not and offered to import them a second time.
+  useEffect(() => {
+    const previous = stored.imported;
+    if (Array.isArray(previous)) {
+      setImported(previous.filter((k): k is string => typeof k === 'string'));
+    }
+  }, [stored]);
 
   // The suggested keys, resolved against the real catalog registry so we never
   // offer something that cannot actually be imported.
@@ -577,6 +591,24 @@ export function FrameworkStep() {
       .filter((c): c is NonNullable<typeof c> => !!c && c.available !== false)
       .slice(0, 5);
   }, [suggestions, catalogs]);
+
+  /**
+   * Importing a catalogue is the ONLY thing in the whole tunnel that creates a
+   * control, and the reveal this tunnel ends on cannot be computed without one:
+   * `coveragePercent` returns nil with zero applicable controls, `IsRevealable`
+   * is then false, and GET /posture answers 404. A user who walked five screens
+   * landed on "Impossible de calculer votre posture" — the exact activation
+   * cliff #438 exists to remove, rebuilt at the last step.
+   *
+   * The server already defines this step as satisfied by HasFramework — that is
+   * what OnboardingStepData.SkipsStep tests to auto-skip it. The client simply
+   * did not hold the same line. It does now.
+   *
+   * Except when the catalogue offers nothing: blocking there would trap the user
+   * in a step with no control to press, which is worse than the 404. Then the
+   * step stays passable and the reveal's own error state does its job.
+   */
+  const mustImport = offered.length > 0 && imported.length === 0;
 
   const runImport = (key: string) => {
     const catalog = offered.find((c) => c.key === key);
@@ -606,11 +638,15 @@ export function FrameworkStep() {
       onBack={() => go({ imported }, -1)}
       onNext={() => go({ imported }, 1)}
       nextLabel={tr('Continuer', 'Continue')}
+      nextDisabled={mustImport}
       busy={busy}
       error={error}
       onRetry={retry}
       errorLabel={tr("Impossible d'enregistrer cette étape.", 'This step could not be saved.')}
-      errorHint={tr('Vos réponses sont conservées — réessayez, rien n\u2019est perdu.', 'Your answers are kept — try again, nothing is lost.')}
+      errorHint={tr(
+        'Vos réponses sont conservées — réessayez, rien n\u2019est perdu.',
+        'Your answers are kept — try again, nothing is lost.',
+      )}
       retryLabel={tr('Réessayer', 'Try again')}
     >
       {isLoading && (
@@ -674,6 +710,17 @@ export function FrameworkStep() {
           {tr(
             'Aucune suggestion pour ces réponses — vous pourrez choisir un référentiel depuis Conformité.',
             'No suggestion for these answers — you can pick a framework from Compliance.',
+          )}
+        </div>
+      )}
+
+      {/* A disabled button with no explanation is its own defect. This says what
+          to press and what it buys, rather than leaving the user to guess. */}
+      {mustImport && (
+        <div className="text-[12.5px] text-ink-soft mt-4" data-testid="framework-required">
+          {tr(
+            'Importez-en un pour continuer : vos contrôles sont ce qui rend votre posture calculable.',
+            'Import one to continue: your controls are what makes your posture computable.',
           )}
         </div>
       )}
